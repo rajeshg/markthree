@@ -1,5 +1,6 @@
 import {
   HeadContent,
+  Outlet,
   Scripts,
   createRootRouteWithContext,
 } from '@tanstack/react-router'
@@ -7,6 +8,8 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 
 import Header from '../components/Header'
+import { ThemeProvider } from '../contexts/ThemeContext'
+import { SettingsProvider } from '../contexts/SettingsContext'
 
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
 
@@ -29,7 +32,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'TanStack Start Starter',
+        title: 'MarkThree v2',
       },
     ],
     links: [
@@ -38,33 +41,53 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         href: appCss,
       },
     ],
+    scripts: [
+      {
+        src: 'https://accounts.google.com/gsi/client',
+        async: true,
+        defer: true,
+      },
+      {
+        src: 'https://apis.google.com/js/api.js',
+        async: true,
+        defer: true,
+      },
+    ],
   }),
 
   shellComponent: RootDocument,
 })
 
-function RootDocument({ children }: { children: React.ReactNode }) {
+function RootDocument() {
   return (
     <html lang="en">
       <head>
         <HeadContent />
       </head>
       <body>
-        <Header />
-        {children}
-        <TanStackDevtools
-          config={{
-            position: 'bottom-right',
-          }}
-          plugins={[
-            {
-              name: 'Tanstack Router',
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-            TanStackQueryDevtools,
-          ]}
-        />
-        <Scripts />
+        <ThemeProvider>
+          <SettingsProvider>
+            <div className="flex flex-col min-h-screen bg-background text-foreground transition-colors duration-200 font-mono">
+              <Header />
+              <main className="flex-1 flex flex-col overflow-hidden">
+                <Outlet />
+              </main>
+            </div>
+            <TanStackDevtools
+              config={{
+                position: 'bottom-right',
+              }}
+              plugins={[
+                {
+                  name: 'Tanstack Router',
+                  render: <TanStackRouterDevtoolsPanel />,
+                },
+                TanStackQueryDevtools,
+              ]}
+            />
+            <Scripts />
+          </SettingsProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
