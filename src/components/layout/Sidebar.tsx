@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { driveApi } from "@/lib/drive/drive-client";
 import { useSettings } from "@/contexts/SettingsContext";
+import { cn } from "@/lib/utils";
 import {
   Sidebar as ShadcnSidebar,
   SidebarContent,
@@ -14,9 +15,17 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuAction,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   FileText,
   Plus,
@@ -25,7 +34,7 @@ import {
   Trash2,
   Image,
   File,
-  ArrowLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -44,12 +53,15 @@ function getFileIcon(mimeType: string, fileName: string) {
 }
 
 export function Sidebar() {
-  const { settings, navigateToFolder, navigateToParent, navigateToRoot } =
-    useSettings();
+  const { settings } = useSettings();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [creatingNew, setCreatingNew] = useState(false);
   const { setOpenMobile } = useSidebar();
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
+    new Set()
+  );
 
   // Use current folder or root drive folder
   const currentFolderId = settings.currentFolderId || settings.driveFolderId;
@@ -73,7 +85,7 @@ export function Sidebar() {
   const handleDelete = async (
     e: React.MouseEvent,
     id: string,
-    name: string,
+    name: string
   ) => {
     e.preventDefault();
     e.stopPropagation();
@@ -92,27 +104,224 @@ export function Sidebar() {
     }
   };
 
+  const handleCreateNewDocument = async () => {
+    if (!settings.driveFolderId) {
+      console.error("No Drive folder configured");
+      return;
+    }
+
+    setCreatingNew(true);
+    try {
+      // Create a new untitled markdown file
+      const timestamp = new Date().toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      const fileName = `Untitled ${timestamp}.md`;
+      const initialContent = "# Untitled\n\n";
+
+      const newFile = await driveApi.createFile(
+        fileName,
+        initialContent,
+        settings.driveFolderId
+      );
+
+      // Invalidate the file list cache
+      queryClient.invalidateQueries({ queryKey: ["drive-files"] });
+
+      // Navigate to the new file
+      navigate({ to: "/editor", search: { fileId: newFile.id } });
+      setOpenMobile(false);
+    } catch (err) {
+      console.error("Failed to create new document:", err);
+      alert("Failed to create new document. Please try again.");
+    } finally {
+      setCreatingNew(false);
+    }
+  };
+
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
+
+  // Component to render folder with its contents (recursive)
+  const FolderItem = ({
+    folder,
+    level = 0,
+  }: {
+    folder: any;
+    level?: number;
+  }) => {
+    const isExpanded = expandedFolders.has(folder.id);
+
+    // Query for folder contents
+    const { data: folderContents, isLoading: isFolderLoading } = useQuery({
+      queryKey: ["drive-files", folder.id],
+      queryFn: () => driveApi.listFiles(folder.id),
+      enabled: isExpanded,
+    });
+
+    const folderDisplayName = folder.name;
+
+    // For nested folders (level > 0), render as sub-item to maintain indentation
+    if (level > 0) {
+      return (
+        <Collapsible
+          open={isExpanded}
+          onOpenChange={() => toggleFolder(folder.id)}
+        >
+          <SidebarMenuSubItem>
+            <CollapsibleTrigger asChild>
+              <SidebarMenuSubButton>
+                <ChevronRight
+                  className={cn(
+                    "size-4 transition-transform",
+                    isExpanded && "rotate-90"
+                  )}
+                />
+                <Folder className="size-4" />
+                <span className="truncate">{folderDisplayName}</span>
+              </SidebarMenuSubButton>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="ml-4 flex flex-col gap-1">
+                {isFolderLoading ? (
+                  <div className="px-2 py-1 text-xs text-muted-foreground">
+                    Loading...
+                  </div>
+                ) : folderContents?.length === 0 ? (
+                  <div className="px-2 py-1 text-xs text-muted-foreground italic">
+                    Empty folder
+                  </div>
+                ) : (
+                  folderContents?.map((item) => {
+                    const IconComponent = getFileIcon(item.mimeType, item.name);
+                    const displayName = item.name.toLowerCase().endsWith(".md")
+                      ? item.name.replace(".md", "")
+                      : item.name;
+                    const isFolder =
+                      item.mimeType === "application/vnd.google-apps.folder";
+
+                    if (isFolder) {
+                      return (
+                        <FolderItem key={item.id} folder={item} level={level + 1} />
+                      );
+                    }
+
+                    return (
+                      <SidebarMenuSubButton
+                        key={item.id}
+                        asChild
+                        isActive={window.location.search.includes(item.id)}
+                      >
+                        <Link
+                          to="/editor"
+                          search={{ fileId: item.id }}
+                          onClick={() => setOpenMobile(false)}
+                        >
+                          <IconComponent className="size-4" />
+                          <span className="truncate">{displayName}</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    );
+                  })
+                )}
+              </div>
+            </CollapsibleContent>
+          </SidebarMenuSubItem>
+        </Collapsible>
+      );
+    }
+
+    // For top-level folders (level 0), render as menu item
+    return (
+      <Collapsible
+        open={isExpanded}
+        onOpenChange={() => toggleFolder(folder.id)}
+      >
+        <SidebarMenuItem>
+          <CollapsibleTrigger asChild>
+            <SidebarMenuButton tooltip={folderDisplayName}>
+              <ChevronRight
+                className={cn(
+                  "size-4 transition-transform",
+                  isExpanded && "rotate-90"
+                )}
+              />
+              <Folder className="size-4" />
+              <span className="truncate">{folderDisplayName}</span>
+            </SidebarMenuButton>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <SidebarMenuSub>
+              {isFolderLoading ? (
+                <SidebarMenuSubItem>
+                  <div className="px-2 py-1 text-xs text-muted-foreground">
+                    Loading...
+                  </div>
+                </SidebarMenuSubItem>
+              ) : folderContents?.length === 0 ? (
+                <SidebarMenuSubItem>
+                  <div className="px-2 py-1 text-xs text-muted-foreground italic">
+                    Empty folder
+                  </div>
+                </SidebarMenuSubItem>
+              ) : (
+                folderContents?.map((item) => {
+                  const IconComponent = getFileIcon(item.mimeType, item.name);
+                  const displayName = item.name.toLowerCase().endsWith(".md")
+                    ? item.name.replace(".md", "")
+                    : item.name;
+                  const isFolder =
+                    item.mimeType === "application/vnd.google-apps.folder";
+
+                  if (isFolder) {
+                    // Recursive folder rendering with increased level
+                    return <FolderItem key={item.id} folder={item} level={level + 1} />;
+                  }
+
+                  return (
+                    <SidebarMenuSubItem key={item.id}>
+                      <SidebarMenuSubButton
+                        asChild
+                        isActive={window.location.search.includes(item.id)}
+                      >
+                        <Link
+                          to="/editor"
+                          search={{ fileId: item.id }}
+                          onClick={() => setOpenMobile(false)}
+                        >
+                          <IconComponent className="size-4" />
+                          <span className="truncate">{displayName}</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  );
+                })
+              )}
+            </SidebarMenuSub>
+          </CollapsibleContent>
+        </SidebarMenuItem>
+      </Collapsible>
+    );
+  };
+
   return (
     <ShadcnSidebar collapsible="icon" variant="sidebar">
       {/* Header */}
       <SidebarHeader>
         <SidebarMenu>
-          {/* Breadcrumb Navigation */}
-          {(settings.folderPath?.length ?? 0) > 0 && (
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={navigateToRoot}
-                className="text-muted-foreground hover:text-foreground"
-                tooltip="Go to root folder"
-              >
-                <Folder className="size-4" />
-                <span className="truncate">
-                  {settings.driveFolderName || "Root"}
-                </span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-
           {/* Current Folder */}
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -127,25 +336,23 @@ export function Sidebar() {
                   {currentFolderName || "No Folder"}
                 </span>
                 <span className="truncate text-xs text-muted-foreground">
-                  Current Folder
+                  Drive Folder
                 </span>
               </div>
             </SidebarMenuButton>
-            {(settings.folderPath?.length ?? 0) > 0 && (
-              <SidebarMenuAction
-                onClick={navigateToParent}
-                title="Go to parent folder"
+            {/* Action buttons wrapper */}
+            <div className="absolute top-1.5 right-1 flex items-center gap-1">
+              <button
+                onClick={() => refetch()}
+                title="Refresh files"
+                className={cn(
+                  "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex aspect-square w-5 items-center justify-center rounded-md p-0 transition-colors",
+                  isFetching && "animate-spin"
+                )}
               >
-                <ArrowLeft className="size-4" />
-              </SidebarMenuAction>
-            )}
-            <SidebarMenuAction
-              onClick={() => refetch()}
-              className={isFetching ? "animate-spin" : ""}
-              title="Refresh files"
-            >
-              <RefreshCw className="size-4" />
-            </SidebarMenuAction>
+                <RefreshCw className="size-4" />
+              </button>
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -159,14 +366,16 @@ export function Sidebar() {
               {/* New Document Button */}
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => {
-                    navigate({ to: "/editor", search: {} });
-                    setOpenMobile(false);
-                  }}
-                  tooltip="New Document"
+                  onClick={handleCreateNewDocument}
+                  disabled={creatingNew}
+                  tooltip="Create New Document"
                 >
-                  <Plus className="size-4" />
-                  <span>New Document</span>
+                  {creatingNew ? (
+                    <RefreshCw className="size-4 animate-spin" />
+                  ) : (
+                    <Plus className="size-4" />
+                  )}
+                  <span>{creatingNew ? "Creating..." : "New Document"}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -197,52 +406,37 @@ export function Sidebar() {
                   const isFolder =
                     item.mimeType === "application/vnd.google-apps.folder";
 
+                  if (isFolder) {
+                    return <FolderItem key={item.id} folder={item} />;
+                  }
+
                   return (
                     <SidebarMenuItem key={item.id}>
                       <SidebarMenuButton
-                        asChild={!isFolder}
+                        asChild
                         tooltip={displayName}
-                        isActive={
-                          !isFolder && window.location.search.includes(item.id)
-                        }
-                        onClick={
-                          isFolder
-                            ? () => {
-                                navigateToFolder(item.id, item.name);
-                                setOpenMobile(false);
-                              }
-                            : undefined
+                        isActive={window.location.search.includes(item.id)}
+                      >
+                        <Link
+                          to="/editor"
+                          search={{ fileId: item.id }}
+                          onClick={() => setOpenMobile(false)}
+                        >
+                          <IconComponent className="size-4" />
+                          <span className="truncate">{displayName}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                      <SidebarMenuAction
+                        showOnHover
+                        disabled={deletingId === item.id}
+                        onClick={(e) => handleDelete(e, item.id, item.name)}
+                        className={
+                          deletingId === item.id ? "animate-pulse" : ""
                         }
                       >
-                        {isFolder ? (
-                          <div className="flex items-center gap-2 cursor-pointer">
-                            <IconComponent className="size-4" />
-                            <span className="truncate">{displayName}</span>
-                          </div>
-                        ) : (
-                          <Link
-                            to="/editor"
-                            search={{ fileId: item.id }}
-                            onClick={() => setOpenMobile(false)}
-                          >
-                            <IconComponent className="size-4" />
-                            <span className="truncate">{displayName}</span>
-                          </Link>
-                        )}
-                      </SidebarMenuButton>
-                      {!isFolder && (
-                        <SidebarMenuAction
-                          showOnHover
-                          disabled={deletingId === item.id}
-                          onClick={(e) => handleDelete(e, item.id, item.name)}
-                          className={
-                            deletingId === item.id ? "animate-pulse" : ""
-                          }
-                        >
-                          <Trash2 className="size-4" />
-                          <span className="sr-only">Delete</span>
-                        </SidebarMenuAction>
-                      )}
+                        <Trash2 className="size-4" />
+                        <span className="sr-only">Delete</span>
+                      </SidebarMenuAction>
                     </SidebarMenuItem>
                   );
                 })

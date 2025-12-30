@@ -45,7 +45,16 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         try {
           const parsed = JSON.parse(saved);
           // Merge with defaults to ensure all new properties are present
-          return { ...defaultSettings, ...parsed };
+          const merged = { ...defaultSettings, ...parsed };
+          
+          // Migration: If currentFolderId is not set but driveFolderId is, initialize it
+          if (!merged.currentFolderId && merged.driveFolderId) {
+            merged.currentFolderId = merged.driveFolderId;
+            merged.currentFolderName = merged.driveFolderName;
+            merged.folderPath = [];
+          }
+          
+          return merged;
         } catch (error) {
           console.warn("Failed to parse settings from localStorage:", error);
           return defaultSettings;

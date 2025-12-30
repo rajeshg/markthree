@@ -302,18 +302,65 @@ function EditorPage() {
   const queryClient = useQueryClient();
 
   const [fileName, setFileName] = useState("Untitled");
-  const lastLoadedFileIdRef = useRef<string | null>(null);
+  const shouldFocusLastBlockRef = useRef<string | null>(null);
 
   const {
     state,
     updateBlock,
     addBlock,
+    removeBlock,
     moveBlock,
     mergeWithPrevious,
     getMarkdown,
     resetEditor,
+    markAsSaved,
     setActiveBlock,
   } = useEditor("");
+  
+  // Explicit save function that takes fileId, isMarkdown, and content as parameters
+  const saveFile = useCallback(async (
+    targetFileId: string,
+    targetFileName: string,
+    isMarkdown: boolean,
+    content: string
+  ) => {
+    if (!settings.driveFolderId) {
+      throw new Error('No Drive folder configured');
+    }
+    
+    // Safety check: Only save markdown files
+    if (!isMarkdown || !targetFileName.toLowerCase().endsWith('.md')) {
+      console.error('[Editor] Refusing to save non-markdown file:', targetFileName);
+      throw new Error('Cannot save non-markdown file');
+    }
+    
+    // Safety check: Content must not be empty
+    if (!content || content.trim() === '') {
+      console.error('[Editor] Refusing to save empty content');
+      throw new Error('Cannot save empty content');
+    }
+    
+    console.log('[Editor] Saving file:', targetFileId, targetFileName, 'Length:', content.length);
+    
+    try {
+      await driveApi.updateFile(targetFileId, content);
+      console.log('[Editor] ✓ Save completed successfully:', targetFileId);
+    } catch (error) {
+      console.error('[Editor] ✗ Save failed:', error);
+      throw error; // Re-throw to let caller handle
+    }
+    
+    // Invalidate queries in background (non-blocking)
+    console.log('[Editor] Invalidating queries...');
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["drive-files"] }),
+      queryClient.invalidateQueries({ queryKey: ["file", targetFileId] })
+    ]).then(() => {
+      console.log('[Editor] Queries invalidated successfully');
+    }).catch(err => {
+      console.error('[Editor] Query invalidation failed:', err);
+    });
+  }, [settings.driveFolderId, queryClient]);
   const [saving, setSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -375,106 +422,201 @@ function EditorPage() {
     });
   }, [state.blocks]);
 
-  // Load content into editor when data arrives from loader
+  // Keep track of the currently loaded file info to know what to save
+  const [currentLoadedFile, setCurrentLoadedFile] = useState<{
+    fileId: string;
+    fileName: string;
+    isMarkdown: boolean;
+  } | null>(null);
+  
+  const previousFileIdRef = useRef<string | null>(null);
+
+  // Load content into editor when data arrives from loader  
   useEffect(() => {
+    const newFileId = searchParams.fileId;
+    const previousFileId = previousFileIdRef.current;
+    
+    // Skip if we're already on this file
+    if (previousFileId === newFileId) {
+      return;
+    }
+    
+    // Auto-save before switching (fire-and-forget)
+    // Capture current state at the moment of file switch
+    const fileToSave = currentLoadedFile;
+    const isDirty = state.isDirty;
+    
+    if (fileToSave && previousFileId && isDirty) {
+      const content = getMarkdown();
+      saveFile(
+        fileToSave.fileId,
+        fileToSave.fileName,
+        fileToSave.isMarkdown,
+        content
+      ).catch(err => {
+        console.error('[Editor] Failed to auto-save before switch:', err);
+      });
+    }
+    
+    // Load the new file
     if (fileData) {
-      const needsLoad = lastLoadedFileIdRef.current !== fileId;
-      
-      if (needsLoad) {
-        if (fileData.isMarkdown) {
-          resetEditor(fileData.content || "");
-          setFileName(fileData.metadata.name.replace(".md", ""));
-
-          // Focus the end of the file on open
-          shouldFocusLastRef.current = true;
-        }
-        lastLoadedFileIdRef.current = fileId;
-      }
-    } else {
-      resetEditor("");
-      lastLoadedFileIdRef.current = null;
-    }
-  }, [fileData, fileId, resetEditor]);
-
-  // Separate effect to handle focusing the last block after state.blocks is updated
-  const shouldFocusLastRef = useRef(false);
-
-  useEffect(() => {
-    if (shouldFocusLastRef.current && state.blocks.length > 0) {
-      const lastBlockId = state.blocks[state.blocks.length - 1].id;
-      
-      // Update state first
-      setActiveBlock(lastBlockId);
-      
-      // Minimal delay - 50ms instead of 300ms
-      setTimeout(() => {
-        const el = document.getElementById(`block-${lastBlockId}`) as HTMLTextAreaElement;
-        if (el) {
-          el.focus();
-          const len = el.value.length;
-          el.setSelectionRange(len, len);
-          // Instant scroll instead of smooth
-          el.scrollIntoView({ behavior: "instant", block: "center" });
-        }
-      }, 50);
-      
-      shouldFocusLastRef.current = false;
-    }
-  }, [state.blocks, setActiveBlock]);
-
-  // Auto-focus active block and scroll into view
-  useEffect(() => {
-    if (state.activeBlockId) {
-      const el = document.getElementById(
-        `block-${state.activeBlockId}`,
-      ) as HTMLTextAreaElement;
-      if (el) {
-        if (document.activeElement !== el) {
-          el.focus();
-        }
-        // Instant scroll for snappiness
-        requestAnimationFrame(() => {
-          el.scrollIntoView({ behavior: "instant", block: "center" });
+      if (fileData.isMarkdown) {
+        resetEditor(fileData.content || "", { focusLast: true });
+        setFileName(fileData.metadata.name.replace(".md", ""));
+        
+        // Update current loaded file info
+        setCurrentLoadedFile({
+          fileId: newFileId!,
+          fileName: fileData.metadata.name,
+          isMarkdown: true
+        });
+      } else {
+        // Non-markdown file
+        setCurrentLoadedFile({
+          fileId: newFileId!,
+          fileName: fileData.metadata.name,
+          isMarkdown: false
         });
       }
+    } else {
+      // No file selected
+      resetEditor("");
+      setCurrentLoadedFile(null);
+      shouldFocusLastBlockRef.current = null;
+    }
+    
+    // Update the ref for next time
+    previousFileIdRef.current = newFileId ?? null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileData, searchParams.fileId]);
+  
+  // Update the shouldFocusLastBlockRef when blocks change after reset
+  useEffect(() => {
+    if (state.blocks.length > 0 && state.activeBlockId) {
+      const lastBlock = state.blocks[state.blocks.length - 1];
+      if (lastBlock.id === state.activeBlockId) {
+        shouldFocusLastBlockRef.current = lastBlock.id;
+      }
+    }
+  }, [state.blocks, state.activeBlockId]);
+
+  // Auto-focus active block and scroll into view (only for user interactions, not initial load)
+  useEffect(() => {
+    if (state.activeBlockId && !shouldFocusLastBlockRef.current) {
+      // Use requestAnimationFrame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        const el = document.getElementById(
+          `block-${state.activeBlockId}`,
+        ) as HTMLTextAreaElement;
+        if (el) {
+          if (document.activeElement !== el) {
+            el.focus();
+            // Position cursor at the end of the content
+            const len = el.value.length;
+            el.setSelectionRange(len, len);
+          }
+          // Instant scroll for snappiness
+          el.scrollIntoView({ behavior: "instant", block: "center" });
+        }
+      });
     }
   }, [state.activeBlockId]);
 
   const handleSave = useCallback(async () => {
-    if (!settings.driveFolderId || !fileId) return;
+    if (!currentLoadedFile) return;
+    
+    console.log('[handleSave] Starting save, setting saving=true');
     setSaving(true);
     try {
       const content = getMarkdown();
-
-      // If filename changed, rename on Drive too
-      if (
-        fileData &&
-        fileName !== fileData.metadata.name.replace(".md", "")
-      ) {
-        await driveApi.renameFile(fileId, `${fileName}.md`);
-      }
-
-      await driveApi.updateFile(fileId, content);
       
-      queryClient.invalidateQueries({ queryKey: ["drive-files"] });
-      queryClient.invalidateQueries({ queryKey: ["file", fileId] });
+      // Use explicit save function with current file info
+      await saveFile(
+        currentLoadedFile.fileId,
+        fileName + '.md', // Use current fileName from state (may have been edited)
+        currentLoadedFile.isMarkdown,
+        content
+      );
+      
+      // Mark editor as saved
+      markAsSaved();
+      
+      // If filename changed, rename on Drive too
+      const originalFileName = currentLoadedFile.fileName.replace(".md", "");
+      if (fileName !== originalFileName) {
+        console.log('[handleSave] Filename changed, renaming:', originalFileName, '→', fileName);
+        await driveApi.renameFile(currentLoadedFile.fileId, `${fileName}.md`);
+        // Update our tracking
+        setCurrentLoadedFile({
+          ...currentLoadedFile,
+          fileName: `${fileName}.md`
+        });
+      }
+      console.log('[handleSave] Save completed successfully');
     } catch (err) {
-      console.error("Save failed", err);
+      console.error("[handleSave] Save failed", err);
     } finally {
+      console.log('[handleSave] Finally block - setting saving=false');
       setSaving(false);
     }
-  }, [settings.driveFolderId, fileId, getMarkdown, fileData, fileName, queryClient]);
+  }, [currentLoadedFile, fileName, getMarkdown, saveFile, markAsSaved]);
 
-  // Auto-save logic
+  // Auto-save logic (only for markdown files)
+  // Use a ref to track if we're currently saving to avoid dependency issues
+  const savingRef = useRef(false);
+  
   useEffect(() => {
-    if (!state.isDirty || !fileId || saving) return;
+    // Skip if not dirty, not markdown, or already saving
+    if (!state.isDirty || !currentLoadedFile?.isMarkdown || savingRef.current) {
+      return;
+    }
 
-    const timer = setTimeout(() => {
-      handleSave();
+    console.log('[Auto-save] Scheduling auto-save in 3 seconds...');
+    const timer = setTimeout(async () => {
+      // Check again before saving (state might have changed)
+      if (!state.isDirty || !currentLoadedFile?.isMarkdown || savingRef.current) {
+        return;
+      }
+      
+      console.log('[Auto-save] Triggering auto-save');
+      savingRef.current = true;
+      setSaving(true);
+      
+      try {
+        const content = getMarkdown();
+        await saveFile(
+          currentLoadedFile.fileId,
+          fileName + '.md',
+          currentLoadedFile.isMarkdown,
+          content
+        );
+        
+        // Mark editor as saved to stop the loop
+        markAsSaved();
+        
+        // Handle filename changes
+        const originalFileName = currentLoadedFile.fileName.replace(".md", "");
+        if (fileName !== originalFileName) {
+          console.log('[Auto-save] Filename changed, renaming');
+          await driveApi.renameFile(currentLoadedFile.fileId, `${fileName}.md`);
+          setCurrentLoadedFile({
+            ...currentLoadedFile,
+            fileName: `${fileName}.md`
+          });
+        }
+        console.log('[Auto-save] Completed');
+      } catch (err) {
+        console.error("[Auto-save] Failed", err);
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
+      }
     }, 3000);
 
-    return () => clearTimeout(timer);
-  }, [state.isDirty, fileId, handleSave, saving]);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [state.isDirty, currentLoadedFile?.fileId, currentLoadedFile?.isMarkdown]);
 
   if (!fileId) {
     return (
@@ -555,7 +697,7 @@ function EditorPage() {
               )}
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || !currentLoadedFile?.isMarkdown}
                 className="flex items-center gap-2 px-3 py-1 text-xs font-bold bg-github-blue hover:bg-github-blue/80 text-white rounded transition-colors disabled:opacity-50"
               >
                 <Save size={14} />
@@ -589,18 +731,144 @@ function EditorPage() {
                 No blocks loaded. Click to add content.
               </div>
             )}
-            {state.blocks.map((block, index) => (
+            {state.blocks.map((block, index) => {
+              // Helper to determine if a block type should be grouped
+              const isGroupableType = (type: string) => 
+                type === 'checkbox' || type === 'code' || type === 'blockquote';
+              
+              // Check if this is the first block in a group
+              const prevBlock = index > 0 ? state.blocks[index - 1] : null;
+              const isFirstInGroup = isGroupableType(block.type) && 
+                (!prevBlock || prevBlock.type !== block.type);
+              
+              // Check if this is the last block in a group
+              const nextBlock = index < state.blocks.length - 1 ? state.blocks[index + 1] : null;
+              const isLastInGroup = isGroupableType(block.type) && 
+                (!nextBlock || nextBlock.type !== block.type);
+              
+              return (
                 <BlockEditor
                   key={block.id}
                   block={block}
                   lineNumberOffset={lineOffsets[index]}
                   showLineNumbers={settings.lineNumbers}
                   isActive={state.activeBlockId === block.id}
+                  isFirstInGroup={isFirstInGroup}
+                  isLastInGroup={isLastInGroup}
                   onUpdate={(updates) => updateBlock(block.id, updates)}
                   onFocus={() => setActiveBlock(block.id)}
                   onMoveUp={() => moveBlock(block.id, "up")}
                   onMoveDown={() => moveBlock(block.id, "down")}
+                  onDelete={block.type === "image" ? () => removeBlock(block.id) : undefined}
+                  onMount={(el) => {
+                    // When the block mounts, check if it's the one we want to focus
+                    if (shouldFocusLastBlockRef.current === block.id) {
+                      shouldFocusLastBlockRef.current = null;
+                      el.focus();
+                      const len = el.value.length;
+                      el.setSelectionRange(len, len);
+                      el.scrollIntoView({ behavior: "instant", block: "center" });
+                    }
+                  }}
                   onKeyDown={(e) => {
+                    const textarea = e.currentTarget;
+                    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+                    const modKey = isMac ? e.metaKey : e.ctrlKey;
+
+                    // Text formatting shortcuts
+                    if (modKey && !e.altKey) {
+                      const start = textarea.selectionStart;
+                      const end = textarea.selectionEnd;
+                      const selectedText = textarea.value.substring(start, end);
+                      
+                      let wrapper = "";
+                      let shouldHandle = true;
+
+                      // Cmd+Shift combinations
+                      if (e.shiftKey) {
+                        switch (e.key.toLowerCase()) {
+                          case "x": // Strikethrough
+                            wrapper = "~~";
+                            break;
+                          case "c": // Inline code (Slack uses Cmd+Shift+C)
+                            wrapper = "`";
+                            break;
+                          case "k": // Code block
+                            e.preventDefault();
+                            updateBlock(block.id, { type: "code" });
+                            return;
+                          default:
+                            shouldHandle = false;
+                        }
+                      } else {
+                        // Cmd combinations (without shift)
+                        switch (e.key.toLowerCase()) {
+                          case "b": // Bold (universal standard!)
+                            wrapper = "**";
+                            break;
+                          case "i": // Italic
+                            wrapper = "*";
+                            break;
+                          case "u": // Underline
+                            wrapper = "__";
+                            break;
+                          case "e": // Code block (Notion style)
+                            e.preventDefault();
+                            updateBlock(block.id, { type: "code" });
+                            return;
+                          default:
+                            shouldHandle = false;
+                        }
+                      }
+
+                      if (shouldHandle && wrapper) {
+                        e.preventDefault();
+                        
+                        const before = textarea.value.substring(0, start);
+                        const after = textarea.value.substring(end);
+                        
+                        // Check if selection is already wrapped
+                        const isWrapped = 
+                          before.endsWith(wrapper) && 
+                          after.startsWith(wrapper);
+                        
+                        if (isWrapped) {
+                          // Unwrap: remove wrapper
+                          const newContent = 
+                            before.slice(0, -wrapper.length) + 
+                            selectedText + 
+                            after.slice(wrapper.length);
+                          updateBlock(block.id, { content: newContent });
+                          
+                          // Restore selection without wrapper
+                          setTimeout(() => {
+                            textarea.setSelectionRange(
+                              start - wrapper.length,
+                              end - wrapper.length
+                            );
+                          }, 0);
+                        } else {
+                          // Wrap: add wrapper
+                          const newContent = 
+                            before + 
+                            wrapper + 
+                            selectedText + 
+                            wrapper + 
+                            after;
+                          updateBlock(block.id, { content: newContent });
+                          
+                          // Restore selection inside wrapper
+                          setTimeout(() => {
+                            textarea.setSelectionRange(
+                              start + wrapper.length,
+                              end + wrapper.length
+                            );
+                          }, 0);
+                        }
+                        return;
+                      }
+                    }
+
                     // Block reordering with Alt + Arrow
                     if (
                       e.altKey &&
@@ -611,12 +879,19 @@ function EditorPage() {
                       return;
                     }
 
-                    // Backspace at start of block - merge with previous
+                    // Backspace at start of block
                     if (e.key === "Backspace") {
                       const textarea = e.currentTarget;
                       if (textarea.selectionStart === 0 && textarea.selectionEnd === 0) {
                         e.preventDefault();
-                        mergeWithPrevious(block.id);
+                        
+                        // For image blocks, delete the entire block if empty or at start
+                        if (block.type === "image") {
+                          removeBlock(block.id);
+                        } else {
+                          // For other blocks, merge with previous
+                          mergeWithPrevious(block.id);
+                        }
                         return;
                       }
                     }
@@ -642,7 +917,8 @@ function EditorPage() {
                     }
                   }}
                 />
-            ))}
+              );
+            })}
           </div>
         </>
       ) : (

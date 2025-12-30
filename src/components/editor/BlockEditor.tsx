@@ -24,6 +24,10 @@ interface BlockEditorProps {
   lineNumberOffset: number;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  onDelete?: () => void;
+  onMount?: (element: HTMLTextAreaElement) => void;
+  isFirstInGroup?: boolean;
+  isLastInGroup?: boolean;
 }
 
 export function BlockEditor({
@@ -36,11 +40,23 @@ export function BlockEditor({
   lineNumberOffset,
   onMoveUp,
   onMoveDown,
+  onDelete,
+  onMount,
+  isFirstInGroup = false,
+  isLastInGroup = false,
 }: BlockEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [imgError, setImgError] = useState(false);
   const [highlightedCode, setHighlightedCode] = useState<string | null>(null);
   const [slashMenuIndex, setSlashMenuIndex] = useState(0);
+
+  // Call onMount when textarea is first mounted
+  useEffect(() => {
+    if (textareaRef.current && onMount) {
+      onMount(textareaRef.current);
+    }
+  }, [onMount]);
 
   const slashCommands: SlashCommand[] = useMemo(
     () => [
@@ -103,7 +119,7 @@ export function BlockEditor({
         icon: "📅",
         type: "today",
         description: "Current date",
-        action: () => onUpdate({ content: format(new Date(), "yyyy-MM-dd ") }),
+        action: () => onUpdate({ content: format(new Date(), "MMM d, yyyy ") }),
       },
       {
         label: "Insert Now",
@@ -176,10 +192,12 @@ export function BlockEditor({
 
     if (block.type !== "image" || !block.metadata?.src) {
       setImgUrl(null);
+      setImgError(block.type === "image" && !block.metadata?.src);
       return;
     }
 
     const src = block.metadata.src;
+    setImgError(false);
 
     // If src is a drive ID, fetch as blob and create object URL
     if (!src.startsWith("http")) {
@@ -190,6 +208,7 @@ export function BlockEditor({
           
           objectUrl = URL.createObjectURL(blob);
           setImgUrl(objectUrl);
+          setImgError(false);
         })
         .catch((err) => {
           if (cancelled) return;
@@ -199,11 +218,17 @@ export function BlockEditor({
           driveApi.getImageUrl(src).then((url) => {
             if (!cancelled && url) {
               setImgUrl(url);
+              setImgError(false);
+            }
+          }).catch(() => {
+            if (!cancelled) {
+              setImgError(true);
             }
           });
         });
     } else {
       setImgUrl(src);
+      setImgError(false);
     }
 
     return () => {
@@ -226,48 +251,58 @@ export function BlockEditor({
   const getBlockStyle = () => {
     switch (block.type) {
       case "h1":
-        return "text-2xl font-bold text-github-blue mt-4 mb-2";
+        return "text-xl sm:text-2xl font-semibold text-github-blue mt-2 sm:mt-3 mb-1 sm:mb-1.5 leading-snug tracking-tight";
       case "h2":
-        return "text-xl font-bold text-github-blue mt-3 mb-1";
+        return "text-lg sm:text-xl font-semibold text-github-blue mt-1.5 sm:mt-2.5 mb-0.5 sm:mb-1 leading-snug tracking-tight";
       case "h3":
-        return "text-lg font-bold text-github-blue mt-2";
+        return "text-base sm:text-lg font-semibold text-github-blue mt-1 sm:mt-2 mb-0.5 leading-snug tracking-tight";
       case "blockquote":
-        return "border-l-4 border-muted-foreground/30 pl-4 italic text-muted-foreground";
+        return "border-l-4 border-muted-foreground/40 pl-3 sm:pl-4 not-italic text-muted-foreground leading-snug";
       case "code":
-        return "font-mono bg-card/50 p-4 rounded-md border border-border text-sm my-2";
+        return "font-mono bg-card/70 p-2 sm:p-3 rounded-md border border-border text-xs sm:text-sm my-1 sm:my-1.5 leading-snug";
       case "hr":
-        return "border-t-2 border-border my-6 py-0 pointer-events-none";
+        return "border-t-2 border-border my-3 sm:my-4 py-0 pointer-events-none";
       case "checkbox":
-        return "text-base leading-relaxed flex items-start gap-3 transition-opacity duration-300";
+        return "leading-snug transition-opacity duration-300 font-normal";
       case "image":
-        return "my-4 flex flex-col gap-2 group/image";
+        return "my-2 sm:my-3 flex flex-col gap-2 group/image";
       default:
-        return "text-base leading-relaxed";
+        return "leading-snug font-normal tracking-normal";
     }
   };
 
   return (
     <div
       className={cn(
-        "group relative flex items-start gap-4 py-0.5 transition-colors duration-75",
+        "group relative flex items-center gap-2 sm:gap-3 py-0.5 transition-colors duration-75",
         isActive && "bg-github-blue/5",
         block.type === "checkbox" &&
           block.metadata?.status === "in_progress" &&
           "bg-github-yellow/[0.03]",
         block.type === "checkbox" &&
           block.metadata?.status === "done" &&
-          "opacity-40",
-        block.type === "image" && "bg-transparent",
+          "opacity-50",
+        // Add spacing at the start of special block groups
+        (block.type === "checkbox" || block.type === "code" || block.type === "blockquote") && 
+          isFirstInGroup && 
+          "mt-1.5",
+        // Add spacing at the end of special block groups
+        (block.type === "checkbox" || block.type === "code" || block.type === "blockquote") && 
+          isLastInGroup && 
+          "mb-1.5",
+        block.type === "image" && "bg-transparent items-start py-1",
+        (block.type === "h1" || block.type === "h2" || block.type === "h3") && "items-start",
       )}
     >
       {/* Gutter / Line Numbers */}
-      <div className="w-12 pt-1.5 text-right text-[10px] text-muted-foreground/30 select-none font-mono shrink-0">
+      <div className="w-8 sm:w-10 text-right text-[9px] sm:text-[10px] text-muted-foreground/40 select-none font-mono shrink-0 leading-snug">
         {showLineNumbers ? lineNumberOffset : ""}
       </div>
 
       <div
         className={cn(
-          "flex-1 min-h-[1.5em] relative flex items-start gap-3",
+          "flex-1 relative flex items-start text-sm sm:text-[15px]",
+          block.type === "checkbox" ? "gap-2 sm:gap-2.5 flex-row items-center" : "gap-2 sm:gap-2.5",
           getBlockStyle(),
         )}
       >
@@ -379,7 +414,40 @@ export function BlockEditor({
           <div className="w-full flex flex-col gap-2 group/image-block">
             {/* Image Preview with Overlay Controls */}
             <div className="relative rounded-md border border-border bg-card overflow-hidden w-full sm:max-w-md group/preview">
-              {imgUrl ? (
+              {imgError ? (
+                <div className="h-40 sm:h-48 flex items-center justify-center bg-red-500/10 border-2 border-red-500/30 text-red-400">
+                  <div className="flex flex-col items-center gap-3 px-4 text-center">
+                    <svg
+                      className="w-12 h-12 sm:w-14 sm:h-14"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                    <div>
+                      <div className="text-sm font-bold mb-1">Image Not Found</div>
+                      <div className="text-xs opacity-75">File may have been deleted or moved</div>
+                    </div>
+                    {onDelete && (
+                      <button
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          onDelete();
+                        }}
+                        className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded text-xs font-bold transition-colors"
+                      >
+                        Delete This Block
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : imgUrl ? (
                 <img
                   key={imgUrl}
                   src={imgUrl}
@@ -387,6 +455,7 @@ export function BlockEditor({
                   className="w-full h-auto max-h-64 sm:max-h-56 object-contain bg-muted/20"
                   loading="eager"
                   decoding="async"
+                  onError={() => setImgError(true)}
                 />
               ) : (
                 <div className="h-40 sm:h-48 flex items-center justify-center animate-pulse text-muted-foreground/20">
@@ -401,7 +470,7 @@ export function BlockEditor({
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth="2"
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 2 0 00-2 2v12a2 2 0 002 2z"
                       />
                     </svg>
                     <span className="text-xs uppercase tracking-widest font-bold">
@@ -412,14 +481,26 @@ export function BlockEditor({
               )}
 
               {/* Overlay Controls - Top Right */}
-              <div className="absolute top-2 right-2 flex gap-1 sm:opacity-0 group-hover/preview:opacity-100 transition-opacity">
+              <div className="absolute top-2 right-2 flex gap-1 opacity-100 sm:opacity-100 transition-opacity">
+                {onDelete && (
+                  <button
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      onDelete();
+                    }}
+                    className="p-2 sm:p-1.5 bg-red-600 hover:bg-red-500 text-white rounded text-xs font-bold transition-colors touch-manipulation shadow-xl min-w-[36px] min-h-[36px] sm:min-w-[28px] sm:min-h-[28px] flex items-center justify-center border-2 border-white/20"
+                    title="Delete image"
+                  >
+                    ✕
+                  </button>
+                )}
                 {onMoveUp && (
                   <button
                     onMouseDown={(e) => {
                       e.preventDefault();
                       onMoveUp();
                     }}
-                    className="p-2 sm:p-1.5 bg-black/70 backdrop-blur-sm hover:bg-github-blue text-white rounded text-xs font-bold transition-colors touch-manipulation shadow-lg min-w-[32px] min-h-[32px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
+                    className="p-2 sm:p-1.5 bg-black/80 backdrop-blur-sm hover:bg-github-blue text-white rounded text-xs font-bold transition-colors touch-manipulation shadow-xl min-w-[36px] min-h-[36px] sm:min-w-[28px] sm:min-h-[28px] flex items-center justify-center border-2 border-white/10"
                     title="Move image up"
                   >
                     ↑
@@ -431,7 +512,7 @@ export function BlockEditor({
                       e.preventDefault();
                       onMoveDown();
                     }}
-                    className="p-2 sm:p-1.5 bg-black/70 backdrop-blur-sm hover:bg-github-blue text-white rounded text-xs font-bold transition-colors touch-manipulation shadow-lg min-w-[32px] min-h-[32px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
+                    className="p-2 sm:p-1.5 bg-black/80 backdrop-blur-sm hover:bg-github-blue text-white rounded text-xs font-bold transition-colors touch-manipulation shadow-xl min-w-[36px] min-h-[36px] sm:min-w-[28px] sm:min-h-[28px] flex items-center justify-center border-2 border-white/10"
                     title="Move image down"
                   >
                     ↓
@@ -479,49 +560,43 @@ export function BlockEditor({
         ) : (
           <>
             {block.type === "checkbox" && (
-              <div className="flex flex-col items-center pt-1 shrink-0">
-                <button
-                  onClick={() => {
-                    const currentStatus = block.metadata?.status || "todo";
-                    const nextStatus =
-                      currentStatus === "todo"
-                        ? "in_progress"
-                        : currentStatus === "in_progress"
-                          ? "done"
-                          : "todo";
-                    onUpdate({
-                      metadata: { ...block.metadata, status: nextStatus },
-                    });
-                  }}
-                  className={cn(
-                    "font-mono text-xs flex items-center justify-center transition-all duration-200 p-1 -m-1 min-w-[32px] min-h-[32px]",
-                    block.metadata?.status === "done" && "text-github-green",
-                    block.metadata?.status === "in_progress" &&
-                      "text-github-yellow",
-                    block.metadata?.status === "todo" &&
-                      "text-muted-foreground/40 hover:text-muted-foreground",
-                  )}
-                >
-                  <span className="flex items-center tracking-tighter font-bold">
-                    [
-                    <span className="w-3 flex justify-center items-center">
-                      {block.metadata?.status === "done" ? (
-                        <span>x</span>
-                      ) : block.metadata?.status === "in_progress" ? (
-                        <span className="w-1.5 h-1.5 rounded-full bg-github-yellow animate-pulse shadow-[0_0_4px_currentColor]" />
-                      ) : (
-                        <span className="w-1.5" />
-                      )}
-                    </span>
-                    ]
-                  </span>
-                </button>
-                {block.metadata?.status === "done" && (
-                  <span className="text-[6px] font-bold text-github-green/50 mt-0.5 tracking-tighter uppercase">
-                    Done
-                  </span>
+              <button
+                onClick={() => {
+                  const currentStatus = block.metadata?.status || "todo";
+                  const nextStatus =
+                    currentStatus === "todo"
+                      ? "in_progress"
+                      : currentStatus === "in_progress"
+                        ? "done"
+                        : "todo";
+                  onUpdate({
+                    metadata: { ...block.metadata, status: nextStatus },
+                  });
+                }}
+                className={cn(
+                  "font-mono inline-flex items-center transition-all duration-200 shrink-0 hover:bg-accent/50 rounded leading-none -my-0.5 px-0.5",
+                  "text-sm sm:text-[15px]",
+                  block.metadata?.status === "done" && "text-github-green",
+                  block.metadata?.status === "in_progress" &&
+                    "text-github-yellow",
+                  block.metadata?.status === "todo" &&
+                    "text-muted-foreground/40 hover:text-muted-foreground",
                 )}
-              </div>
+              >
+                <span className="inline-flex items-center tracking-tighter font-bold leading-none">
+                  [
+                  <span className="w-2 inline-flex justify-center items-center">
+                    {block.metadata?.status === "done" ? (
+                      <span>x</span>
+                    ) : block.metadata?.status === "in_progress" ? (
+                      <span className="w-1 h-1 rounded-full bg-github-yellow animate-pulse shadow-[0_0_4px_currentColor]" />
+                    ) : (
+                      <span className="w-1" />
+                    )}
+                  </span>
+                  ]
+                </span>
+              </button>
             )}
 
             {block.type === "hr" ? (

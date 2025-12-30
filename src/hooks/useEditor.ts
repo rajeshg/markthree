@@ -100,15 +100,24 @@ export function useEditor(initialMarkdown: string = "") {
     return blocksToMarkdown(state.blocks);
   }, [state.blocks]);
 
-  const resetEditor = useCallback((markdown: string) => {
+  const resetEditor = useCallback((markdown: string, options?: { focusLast?: boolean }) => {
     const parsedBlocks = parseMarkdownToBlocks(markdown);
+    const lastBlockId = parsedBlocks.length > 0 ? parsedBlocks[parsedBlocks.length - 1].id : null;
     
     setState({
       blocks: parsedBlocks,
-      activeBlockId: null,
+      activeBlockId: options?.focusLast ? lastBlockId : null,
       isDirty: false,
       lastSaved: new Date(),
     });
+  }, []);
+
+  const markAsSaved = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      isDirty: false,
+      lastSaved: new Date(),
+    }));
   }, []);
 
   const moveBlock = useCallback((id: string, direction: "up" | "down") => {
@@ -142,6 +151,7 @@ export function useEditor(initialMarkdown: string = "") {
     moveBlock,
     getMarkdown,
     resetEditor,
+    markAsSaved,
     setActiveBlock: (id: string | null) =>
       setState((p) => ({ ...p, activeBlockId: id })),
   };
