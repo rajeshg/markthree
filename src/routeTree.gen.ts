@@ -8,165 +8,165 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root";
-import { Route as AuthenticatedRouteImport } from "./routes/_authenticated";
-import { Route as IndexRouteImport } from "./routes/index";
-import { Route as AuthenticatedSetupRouteImport } from "./routes/_authenticated/setup";
-import { Route as AuthenticatedEditorRouteImport } from "./routes/_authenticated/editor";
-import { Route as ApiDriveTokenRouteImport } from "./routes/api/drive/token";
-import { Route as ApiAuthSplatRouteImport } from "./routes/api/auth/$";
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedSetupRouteImport } from './routes/_authenticated/setup'
+import { Route as AuthenticatedEditorRouteImport } from './routes/_authenticated/editor'
+import { Route as ApiDriveTokenRouteImport } from './routes/api/drive/token'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
-  id: "/_authenticated",
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AuthenticatedSetupRoute = AuthenticatedSetupRouteImport.update({
-  id: "/setup",
-  path: "/setup",
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => AuthenticatedRoute,
-} as any);
+} as any)
 const AuthenticatedEditorRoute = AuthenticatedEditorRouteImport.update({
-  id: "/editor",
-  path: "/editor",
+  id: '/editor',
+  path: '/editor',
   getParentRoute: () => AuthenticatedRoute,
-} as any);
+} as any)
 const ApiDriveTokenRoute = ApiDriveTokenRouteImport.update({
-  id: "/api/drive/token",
-  path: "/api/drive/token",
+  id: '/api/drive/token',
+  path: '/api/drive/token',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
-  id: "/api/auth/$",
-  path: "/api/auth/$",
+  id: '/api/auth/$',
+  path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute;
-  "/editor": typeof AuthenticatedEditorRoute;
-  "/setup": typeof AuthenticatedSetupRoute;
-  "/api/auth/$": typeof ApiAuthSplatRoute;
-  "/api/drive/token": typeof ApiDriveTokenRoute;
+  '/': typeof IndexRoute
+  '/editor': typeof AuthenticatedEditorRoute
+  '/setup': typeof AuthenticatedSetupRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/drive/token': typeof ApiDriveTokenRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute;
-  "/editor": typeof AuthenticatedEditorRoute;
-  "/setup": typeof AuthenticatedSetupRoute;
-  "/api/auth/$": typeof ApiAuthSplatRoute;
-  "/api/drive/token": typeof ApiDriveTokenRoute;
+  '/': typeof IndexRoute
+  '/editor': typeof AuthenticatedEditorRoute
+  '/setup': typeof AuthenticatedSetupRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/drive/token': typeof ApiDriveTokenRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  "/": typeof IndexRoute;
-  "/_authenticated": typeof AuthenticatedRouteWithChildren;
-  "/_authenticated/editor": typeof AuthenticatedEditorRoute;
-  "/_authenticated/setup": typeof AuthenticatedSetupRoute;
-  "/api/auth/$": typeof ApiAuthSplatRoute;
-  "/api/drive/token": typeof ApiDriveTokenRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/_authenticated/editor': typeof AuthenticatedEditorRoute
+  '/_authenticated/setup': typeof AuthenticatedSetupRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/drive/token': typeof ApiDriveTokenRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/editor" | "/setup" | "/api/auth/$" | "/api/drive/token";
-  fileRoutesByTo: FileRoutesByTo;
-  to: "/" | "/editor" | "/setup" | "/api/auth/$" | "/api/drive/token";
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths: '/' | '/editor' | '/setup' | '/api/auth/$' | '/api/drive/token'
+  fileRoutesByTo: FileRoutesByTo
+  to: '/' | '/editor' | '/setup' | '/api/auth/$' | '/api/drive/token'
   id:
-    | "__root__"
-    | "/"
-    | "/_authenticated"
-    | "/_authenticated/editor"
-    | "/_authenticated/setup"
-    | "/api/auth/$"
-    | "/api/drive/token";
-  fileRoutesById: FileRoutesById;
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/_authenticated/editor'
+    | '/_authenticated/setup'
+    | '/api/auth/$'
+    | '/api/drive/token'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren;
-  ApiAuthSplatRoute: typeof ApiAuthSplatRoute;
-  ApiDriveTokenRoute: typeof ApiDriveTokenRoute;
+  IndexRoute: typeof IndexRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiDriveTokenRoute: typeof ApiDriveTokenRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/_authenticated": {
-      id: "/_authenticated";
-      path: "";
-      fullPath: "";
-      preLoaderRoute: typeof AuthenticatedRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/": {
-      id: "/";
-      path: "/";
-      fullPath: "/";
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/_authenticated/setup": {
-      id: "/_authenticated/setup";
-      path: "/setup";
-      fullPath: "/setup";
-      preLoaderRoute: typeof AuthenticatedSetupRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
-    "/_authenticated/editor": {
-      id: "/_authenticated/editor";
-      path: "/editor";
-      fullPath: "/editor";
-      preLoaderRoute: typeof AuthenticatedEditorRouteImport;
-      parentRoute: typeof AuthenticatedRoute;
-    };
-    "/api/drive/token": {
-      id: "/api/drive/token";
-      path: "/api/drive/token";
-      fullPath: "/api/drive/token";
-      preLoaderRoute: typeof ApiDriveTokenRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/api/auth/$": {
-      id: "/api/auth/$";
-      path: "/api/auth/$";
-      fullPath: "/api/auth/$";
-      preLoaderRoute: typeof ApiAuthSplatRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/setup': {
+      id: '/_authenticated/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof AuthenticatedSetupRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/editor': {
+      id: '/_authenticated/editor'
+      path: '/editor'
+      fullPath: '/editor'
+      preLoaderRoute: typeof AuthenticatedEditorRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/api/drive/token': {
+      id: '/api/drive/token'
+      path: '/api/drive/token'
+      fullPath: '/api/drive/token'
+      preLoaderRoute: typeof ApiDriveTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
-  AuthenticatedEditorRoute: typeof AuthenticatedEditorRoute;
-  AuthenticatedSetupRoute: typeof AuthenticatedSetupRoute;
+  AuthenticatedEditorRoute: typeof AuthenticatedEditorRoute
+  AuthenticatedSetupRoute: typeof AuthenticatedSetupRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedEditorRoute: AuthenticatedEditorRoute,
   AuthenticatedSetupRoute: AuthenticatedSetupRoute,
-};
+}
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
-);
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDriveTokenRoute: ApiDriveTokenRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx";
-import type { createStart } from "@tanstack/react-start";
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
   interface Register {
-    ssr: true;
-    router: Awaited<ReturnType<typeof getRouter>>;
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
   }
 }

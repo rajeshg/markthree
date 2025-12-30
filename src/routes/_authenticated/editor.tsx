@@ -109,12 +109,12 @@ function FileViewer({ fileData, fileId }: { fileData: any; fileId: string }) {
         </div>
 
         {/* Image Viewer */}
-        <div className="flex-1 flex items-center justify-center p-8 overflow-auto">
+        <div className="flex-1 flex items-center justify-center p-4 md:p-8 overflow-auto">
           <img
             src={blobUrl}
             alt={metadata.name}
             className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
-            style={{ maxWidth: "90vw", maxHeight: "80vh" }}
+            style={{ maxWidth: "95vw", maxHeight: "80vh" }}
           />
         </div>
       </div>
@@ -156,7 +156,7 @@ function FileViewer({ fileData, fileId }: { fileData: any; fileId: string }) {
       </div>
 
       {/* File info */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-4 md:p-8">
         <div className="text-center space-y-4 max-w-md">
           <FileText size={64} className="mx-auto text-muted-foreground" />
           <div>
@@ -216,6 +216,8 @@ function EditorPage() {
   const [fileId, setFileId] = useState<string | null>(queryFileId || null);
   const [fileName, setFileName] = useState("Untitled");
   const lastLoadedFileIdRef = useRef<string | null>(null);
+  const isInitialLoadRef = useRef(true);
+
   const {
     state,
     updateBlock,
@@ -227,6 +229,26 @@ function EditorPage() {
   } = useEditor("");
   const [saving, setSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Sync state with query param and handle redirection for last open doc
+  useEffect(() => {
+    if (queryFileId) {
+      setFileId(queryFileId);
+      localStorage.setItem("markthree_last_file_id", queryFileId);
+    } else if (isInitialLoadRef.current) {
+      const lastFileId = localStorage.getItem("markthree_last_file_id");
+      if (lastFileId) {
+        navigate({
+          to: "/editor",
+          search: { fileId: lastFileId },
+          replace: true,
+        });
+      }
+      isInitialLoadRef.current = false;
+    } else {
+      setFileId(null);
+    }
+  }, [queryFileId, navigate]);
 
   const handleImageUpload = useCallback(
     async (file: File) => {
@@ -286,19 +308,12 @@ function EditorPage() {
     });
   }, [state.blocks]);
 
-  // Sync state with query param
-  useEffect(() => {
-    if (queryFileId !== fileId) {
-      setFileId(queryFileId || null);
-      lastLoadedFileIdRef.current = null;
-    }
-  }, [queryFileId, fileId]);
-
   // Fetch file metadata and content
   const {
     data: fileData,
     isLoading: isLoadingContent,
     isSuccess,
+    error: fetchError,
   } = useQuery({
     queryKey: ["file", fileId],
     queryFn: async () => {
@@ -335,6 +350,15 @@ function EditorPage() {
     },
   });
 
+  // Handle case where remembered file is missing/deleted
+  useEffect(() => {
+    if (fetchError) {
+      console.warn("[Editor] File not found or inaccessible, clearing last doc.");
+      localStorage.removeItem("markthree_last_file_id");
+      navigate({ to: "/editor", search: {}, replace: true });
+    }
+  }, [fetchError, navigate]);
+
   // Load content into editor when data arrives
   useEffect(() => {
     if (fileData) {
@@ -342,6 +366,15 @@ function EditorPage() {
       if (needsLoad) {
         if (fileData.isMarkdown) {
           resetEditor(fileData.content || "");
+          setFileName(fileData.metadata.name.replace(".md", ""));
+
+          // Focus the end of the file on open
+          setTimeout(() => {
+            const lastBlock = state.blocks[state.blocks.length - 1];
+            if (lastBlock) {
+              setActiveBlock(lastBlock.id);
+            }
+          }, 50);
         }
         lastLoadedFileIdRef.current = fileId;
       }
@@ -349,50 +382,40 @@ function EditorPage() {
       resetEditor("");
       lastLoadedFileIdRef.current = null;
     }
-  }, [fileData, fileId, isSuccess]);
+  }, [fileData, fileId, isSuccess, resetEditor, setActiveBlock, state.blocks.length]);
 
-  // Auto-focus new blocks
+  // Auto-focus new blocks and scroll into view
   useEffect(() => {
     if (state.activeBlockId) {
       const el = document.getElementById(
         `block-${state.activeBlockId}`,
       ) as HTMLTextAreaElement;
-      if (el && document.activeElement !== el) {
-        el.focus();
+      if (el) {
+        if (document.activeElement !== el) {
+          el.focus();
+        }
+        // Ensure the block is visible, especially when keyboard pops up
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }
   }, [state.activeBlockId]);
 
-  const handleSave = async () => {
-    if (!settings.driveFolderId) return;
+  const handleSave = useCallback(async () => {
+    if (!settings.driveFolderId || !fileId) return;
     setSaving(true);
     try {
       const content = getMarkdown();
 
       // If filename changed, rename on Drive too
       if (
-        fileId &&
         fileData &&
         fileName !== fileData.metadata.name.replace(".md", "")
       ) {
         await driveApi.renameFile(fileId, `${fileName}.md`);
       }
 
-      if (fileId) {
-        await driveApi.updateFile(fileId, content);
-      } else {
-        const file = await driveApi.createFile(
-          `${fileName}.md`,
-          content,
-          settings.driveFolderId,
-        );
-        setFileId(file.id);
-        navigate({
-          to: "/editor",
-          search: { fileId: file.id },
-          replace: true,
-        });
-      }
+      await driveApi.updateFile(fileId, content);
+      
       queryClient.invalidateQueries({ queryKey: ["drive-files"] });
       queryClient.invalidateQueries({ queryKey: ["file", fileId] });
     } catch (err) {
@@ -400,7 +423,46 @@ function EditorPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [settings.driveFolderId, fileId, getMarkdown, fileData, fileName, queryClient]);
+
+  // Auto-save logic
+  useEffect(() => {
+    if (!state.isDirty || !fileId || saving) return;
+
+    const timer = setTimeout(() => {
+      handleSave();
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [state.isDirty, fileId, handleSave, saving]);
+
+  if (!fileId) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-background">
+        <div className="max-w-md space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="relative mx-auto w-24 h-24 bg-github-blue/10 rounded-full flex items-center justify-center">
+            <FileText size={48} className="text-github-blue" />
+            <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-background border-2 border-github-blue/20 rounded-full flex items-center justify-center">
+              <span className="text-lg">✨</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold tracking-tight">No file selected</h2>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Select a markdown file from the sidebar to start editing, or
+              create a new one to get started with your ideas.
+            </p>
+          </div>
+          <button
+            onClick={() => addBlock("p")}
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-github-blue hover:bg-github-blue/80 text-white rounded-lg font-bold transition-all shadow-lg shadow-github-blue/20 hover:scale-105 active:scale-95"
+          >
+            Create New Document
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoadingContent) {
     return (
@@ -469,10 +531,21 @@ function EditorPage() {
 
           {/* Editor Content */}
           <div
-            className="flex-1 overflow-y-auto custom-scrollbar p-8 max-w-5xl mx-auto w-full space-y-0"
+            className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 max-w-5xl mx-auto w-full space-y-0"
             onClick={(e) => {
-              if (e.target === e.currentTarget && state.blocks.length === 0) {
-                addBlock("p");
+              if (e.target === e.currentTarget) {
+                // If clicking in the blank area, add a block at the end
+                // or focus the last block if it's empty
+                const lastBlock = state.blocks[state.blocks.length - 1];
+                if (
+                  lastBlock &&
+                  lastBlock.content === "" &&
+                  lastBlock.type === "p"
+                ) {
+                  setActiveBlock(lastBlock.id);
+                } else {
+                  addBlock("p", lastBlock?.id || null);
+                }
               }
             }}
           >

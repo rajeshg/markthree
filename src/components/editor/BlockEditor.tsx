@@ -1,8 +1,18 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import { EditorBlock } from "@/types/editor";
 import { cn } from "@/lib/utils";
 import { driveApi } from "@/lib/drive/drive-client";
 import { codeToHtml } from "shiki";
+import { format } from "date-fns";
+
+// Slash Command Types
+interface SlashCommand {
+  label: string;
+  icon: string;
+  type: string;
+  description: string;
+  action: () => void;
+}
 
 interface BlockEditorProps {
   block: EditorBlock;
@@ -12,6 +22,8 @@ interface BlockEditorProps {
   onFocus: () => void;
   isActive: boolean;
   lineNumberOffset: number;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
 export function BlockEditor({
@@ -24,10 +36,129 @@ export function BlockEditor({
   lineNumberOffset,
   onMoveUp,
   onMoveDown,
-}: BlockEditorProps & { onMoveUp?: () => void; onMoveDown?: () => void }) {
+}: BlockEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [highlightedCode, setHighlightedCode] = useState<string | null>(null);
+  const [slashMenuIndex, setSlashMenuIndex] = useState(0);
+
+  const slashCommands: SlashCommand[] = useMemo(
+    () => [
+      {
+        label: "H1 Header",
+        icon: "H1",
+        type: "h1",
+        description: "Large section heading",
+        action: () => onUpdate({ type: "h1", content: "" }),
+      },
+      {
+        label: "H2 Header",
+        icon: "H2",
+        type: "h2",
+        description: "Medium section heading",
+        action: () => onUpdate({ type: "h2", content: "" }),
+      },
+      {
+        label: "H3 Header",
+        icon: "H3",
+        type: "h3",
+        description: "Small section heading",
+        action: () => onUpdate({ type: "h3", content: "" }),
+      },
+      {
+        label: "Task List",
+        icon: "[ ]",
+        type: "checkbox",
+        description: "Track tasks with checkboxes",
+        action: () =>
+          onUpdate({
+            type: "checkbox",
+            content: "",
+            metadata: { status: "todo" },
+          }),
+      },
+      {
+        label: "Code Block",
+        icon: "</>",
+        type: "code",
+        description: "Syntax highlighted code",
+        action: () => onUpdate({ type: "code", content: "" }),
+      },
+      {
+        label: "Quote",
+        icon: "“",
+        type: "blockquote",
+        description: "Capture a quotation",
+        action: () => onUpdate({ type: "blockquote", content: "" }),
+      },
+      {
+        label: "Divider",
+        icon: "—",
+        type: "hr",
+        description: "Horizontal separator",
+        action: () => onUpdate({ type: "hr", content: "" }),
+      },
+      {
+        label: "Insert Today",
+        icon: "📅",
+        type: "today",
+        description: "Current date",
+        action: () => onUpdate({ content: format(new Date(), "yyyy-MM-dd ") }),
+      },
+      {
+        label: "Insert Now",
+        icon: "⏰",
+        type: "now",
+        description: "Current time",
+        action: () => onUpdate({ content: format(new Date(), "HH:mm ") }),
+      },
+    ],
+    [onUpdate],
+  );
+
+  const filteredCommands = useMemo(() => {
+    if (!block.content.startsWith("/")) return [];
+    const query = block.content.slice(1).toLowerCase();
+    return slashCommands.filter(
+      (c) =>
+        c.label.toLowerCase().includes(query) ||
+        c.type.toLowerCase().includes(query),
+    );
+  }, [block.content, slashCommands]);
+
+  // Reset menu index when content changes
+  useEffect(() => {
+    setSlashMenuIndex(0);
+  }, [block.content]);
+
+  // Handle keyboard navigation in slash menu
+  const handleSlashKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (filteredCommands.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSlashMenuIndex((i) => (i + 1) % filteredCommands.length);
+        return true;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSlashMenuIndex(
+          (i) => (i - 1 + filteredCommands.length) % filteredCommands.length,
+        );
+        return true;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        filteredCommands[slashMenuIndex].action();
+        return true;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onUpdate({ content: "" });
+        return true;
+      }
+    }
+    return false;
+  };
 
   // Auto-resize textarea to fit content
   useEffect(() => {
@@ -134,13 +265,13 @@ export function BlockEditor({
       >
         {/* Formatting Toolbar / Slash Menu */}
         {isActive && block.content === "" && (
-          <div className="absolute -top-8 left-0 flex items-center gap-1 bg-card border border-border px-2 py-1 rounded shadow-xl z-50 animate-in fade-in slide-in-from-bottom-2">
+          <div className="absolute -top-10 sm:-top-8 left-0 flex items-center gap-1 bg-card border border-border px-2 py-1.5 sm:py-1 rounded shadow-xl z-50 animate-in fade-in slide-in-from-bottom-2">
             <button
               onMouseDown={(e) => {
                 e.preventDefault();
                 onUpdate({ type: "h1" });
               }}
-              className="p-1 hover:bg-accent rounded text-[10px] font-bold"
+              className="p-2 sm:p-1 hover:bg-accent rounded text-[10px] font-bold min-w-[28px] min-h-[28px] flex items-center justify-center"
             >
               H1
             </button>
@@ -149,7 +280,7 @@ export function BlockEditor({
                 e.preventDefault();
                 onUpdate({ type: "h2" });
               }}
-              className="p-1 hover:bg-accent rounded text-[10px] font-bold"
+              className="p-2 sm:p-1 hover:bg-accent rounded text-[10px] font-bold min-w-[28px] min-h-[28px] flex items-center justify-center"
             >
               H2
             </button>
@@ -158,7 +289,7 @@ export function BlockEditor({
                 e.preventDefault();
                 onUpdate({ type: "checkbox", metadata: { status: "todo" } });
               }}
-              className="p-1 hover:bg-accent rounded text-[10px] font-bold"
+              className="p-2 sm:p-1 hover:bg-accent rounded text-[10px] font-bold min-w-[28px] min-h-[28px] flex items-center justify-center"
             >
               TODO
             </button>
@@ -167,7 +298,7 @@ export function BlockEditor({
                 e.preventDefault();
                 onUpdate({ type: "code" });
               }}
-              className="p-1 hover:bg-accent rounded text-[10px] font-bold"
+              className="p-2 sm:p-1 hover:bg-accent rounded text-[10px] font-bold min-w-[28px] min-h-[28px] flex items-center justify-center"
             >
               CODE
             </button>
@@ -176,7 +307,7 @@ export function BlockEditor({
                 e.preventDefault();
                 onUpdate({ type: "blockquote" });
               }}
-              className="p-1 hover:bg-accent rounded text-[10px] font-bold uppercase"
+              className="p-2 sm:p-1 hover:bg-accent rounded text-[10px] font-bold uppercase min-w-[28px] min-h-[28px] flex items-center justify-center"
             >
               Quote
             </button>
@@ -188,7 +319,7 @@ export function BlockEditor({
                     e.preventDefault();
                     onMoveUp?.();
                   }}
-                  className="p-1 hover:bg-accent rounded text-[10px] font-bold uppercase"
+                  className="p-2 sm:p-1 hover:bg-accent rounded text-[10px] font-bold uppercase min-w-[28px] min-h-[28px] flex items-center justify-center"
                 >
                   ↑
                 </button>
@@ -197,7 +328,7 @@ export function BlockEditor({
                     e.preventDefault();
                     onMoveDown?.();
                   }}
-                  className="p-1 hover:bg-accent rounded text-[10px] font-bold uppercase"
+                  className="p-2 sm:p-1 hover:bg-accent rounded text-[10px] font-bold uppercase min-w-[28px] min-h-[28px] flex items-center justify-center"
                 >
                   ↓
                 </button>
@@ -292,14 +423,14 @@ export function BlockEditor({
               )}
 
               {/* Overlay Controls - Top Right */}
-              <div className="absolute top-2 right-2 flex gap-1 opacity-0 sm:group-hover/preview:opacity-100 sm:opacity-0 opacity-100 transition-opacity">
+              <div className="absolute top-2 right-2 flex gap-1 sm:opacity-0 group-hover/preview:opacity-100 transition-opacity">
                 {onMoveUp && (
                   <button
                     onMouseDown={(e) => {
                       e.preventDefault();
                       onMoveUp();
                     }}
-                    className="p-1.5 bg-black/70 backdrop-blur-sm hover:bg-github-blue text-white rounded text-xs font-bold transition-colors touch-manipulation shadow-lg"
+                    className="p-2 sm:p-1.5 bg-black/70 backdrop-blur-sm hover:bg-github-blue text-white rounded text-xs font-bold transition-colors touch-manipulation shadow-lg min-w-[32px] min-h-[32px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
                     title="Move image up"
                   >
                     ↑
@@ -311,7 +442,7 @@ export function BlockEditor({
                       e.preventDefault();
                       onMoveDown();
                     }}
-                    className="p-1.5 bg-black/70 backdrop-blur-sm hover:bg-github-blue text-white rounded text-xs font-bold transition-colors touch-manipulation shadow-lg"
+                    className="p-2 sm:p-1.5 bg-black/70 backdrop-blur-sm hover:bg-github-blue text-white rounded text-xs font-bold transition-colors touch-manipulation shadow-lg min-w-[32px] min-h-[32px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
                     title="Move image down"
                   >
                     ↓
@@ -329,7 +460,7 @@ export function BlockEditor({
 
             {/* Compact Markdown Editor Below Image */}
             <div className="flex items-start gap-2 w-full sm:max-w-md">
-              <span className="text-[10px] text-muted-foreground/40 font-mono shrink-0 pt-1">
+              <span className="text-[10px] text-muted-foreground/40 font-mono shrink-0 pt-2">
                 MD:
               </span>
               <textarea
@@ -350,7 +481,7 @@ export function BlockEditor({
                 onFocus={onFocus}
                 onKeyDown={onKeyDown}
                 placeholder="![alt](url-or-id)"
-                className="text-[11px] font-mono bg-muted/30 border border-border/50 focus:border-github-blue/50 focus:bg-muted/50 rounded px-2 py-1.5 resize-none w-full text-muted-foreground focus:text-foreground leading-tight transition-colors overflow-hidden"
+                className="text-[11px] font-mono bg-muted/30 border border-border/50 focus:border-github-blue/50 focus:bg-muted/50 rounded px-2 py-2 sm:py-1.5 resize-none w-full text-muted-foreground focus:text-foreground leading-tight transition-colors overflow-hidden min-h-[44px] sm:min-h-0"
                 rows={2}
                 spellCheck={false}
               />
@@ -374,7 +505,7 @@ export function BlockEditor({
                     });
                   }}
                   className={cn(
-                    "font-mono text-xs flex items-center justify-center transition-all duration-200",
+                    "font-mono text-xs flex items-center justify-center transition-all duration-200 p-1 -m-1 min-w-[32px] min-h-[32px]",
                     block.metadata?.status === "done" && "text-github-green",
                     block.metadata?.status === "in_progress" &&
                       "text-github-yellow",
