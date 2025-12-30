@@ -1,4 +1,4 @@
-import { getDriveToken } from './drive-auth';
+import { getDriveToken } from '@/routes/api/drive/token';
 
 export interface DriveFile {
   id: string;
@@ -46,6 +46,11 @@ export const driveApi = {
     const url = `${DRIVE_API_BASE}?q=${encodeURIComponent(query)}&fields=files(id, name, mimeType, modifiedTime)&orderBy=modifiedTime desc`;
     const data = await fetchWithAuth(url);
     return data.files;
+  },
+
+  async getFileMetadata(fileId: string): Promise<DriveFile> {
+    const url = `${DRIVE_API_BASE}/${fileId}?fields=id,name,mimeType,modifiedTime`;
+    return fetchWithAuth(url);
   },
 
   async getFileContent(fileId: string): Promise<string> {
@@ -101,6 +106,17 @@ export const driveApi = {
     });
   },
 
+  async renameFile(fileId: string, newName: string): Promise<void> {
+    const url = `${DRIVE_API_BASE}/${fileId}`;
+    await fetchWithAuth(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: newName.endsWith('.md') ? newName : `${newName}.md` }),
+    });
+  },
+
   async deleteFile(fileId: string): Promise<void> {
     const url = `${DRIVE_API_BASE}/${fileId}`;
     await fetchWithAuth(url, {
@@ -109,6 +125,14 @@ export const driveApi = {
   },
 
   async createFolder(name: string): Promise<DriveFolder> {
+    const query = `name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+    const url = `${DRIVE_API_BASE}?q=${encodeURIComponent(query)}&fields=files(id, name)`;
+    const existing = await fetchWithAuth(url);
+    
+    if (existing.files && existing.files.length > 0) {
+      return existing.files[0];
+    }
+
     const metadata = {
       name,
       mimeType: 'application/vnd.google-apps.folder',
@@ -120,5 +144,86 @@ export const driveApi = {
       },
       body: JSON.stringify(metadata),
     });
+  },
+
+  async uploadImage(file: File, folderId: string): Promise<DriveFile> {
+    const metadata = {
+      name: file.name,
+      mimeType: file.type,
+      parents: [folderId],
+    };
+
+    const boundary = '-------314159265358979323846';
+    const delimiter = `\r\n--${boundary}\r\n`;
+    const closeDelimiter = `\r\n--${boundary}--`;
+
+    const reader = new FileReader();
+    const fileContent: ArrayBuffer = await new Promise((resolve, reject) => {
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+
+    const metadataPart =
+      delimiter +
+      'Content-Type: application/json\r\n\r\n' +
+      JSON.stringify(metadata) +
+      delimiter +
+      `Content-Type: ${file.type}\r\n\r\n`;
+
+    // Combine metadata and binary file content
+    const metadataBuffer = new TextEncoder().encode(metadataPart);
+    const closeBuffer = new TextEncoder().encode(closeDelimiter);
+    
+    const body = new Uint8Array(metadataBuffer.length + fileContent.byteLength + closeBuffer.length);
+    body.set(metadataBuffer);
+    body.set(new Uint8Array(fileContent), metadataBuffer.length);
+    body.set(closeBuffer, metadataBuffer.length + fileContent.byteLength);
+
+    const url = `${UPLOAD_API_BASE}?uploadType=multipart&fields=id,name,mimeType`;
+    return fetchWithAuth(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    });
+  },
+
+  async getFileBlob(fileId: string): Promise<Blob> {
+    const token = await getDriveToken();
+    if (!token) {
+      throw new Error('No authentication token available');
+    }
+    const url = `${DRIVE_API_BASE}/${fileId}?alt=media`;
+    console.log('[Drive] Fetching blob for:', fileId);
+    
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Drive] Blob fetch failed (${response.status}):`, errorText);
+      throw new Error(`Failed to fetch image (${response.status}): ${errorText}`);
+    }
+    
+    const blob = await response.blob();
+    console.log('[Drive] Blob fetched successfully:', blob.type, blob.size, 'bytes');
+    return blob;
+  },
+
+  async getImageUrl(fileId: string): Promise<string> {
+    const token = await getDriveToken();
+    if (!token) {
+      console.warn('[Drive] No token available for image URL');
+      return '';
+    }
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&access_token=${token}`;
+    console.log('[Drive] Generated image URL for:', fileId);
+    return url;
   }
+
 };

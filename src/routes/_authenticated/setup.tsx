@@ -56,8 +56,8 @@ function SetupComponent() {
             <div className="flex items-center gap-4">
               <FolderPlus className="text-github-blue" size={24} />
               <div className="text-left">
-                <div className="font-bold">Create Default Folder</div>
-                <div className="text-xs text-muted-foreground">Creates "MarkThree Documents" in your Drive</div>
+                <div className="font-bold">Use Default Folder</div>
+                <div className="text-xs text-muted-foreground">Reuses or creates "MarkThree Documents" in your Drive</div>
               </div>
             </div>
             <Check className="opacity-0 group-hover:opacity-100 text-github-blue transition-opacity" size={20} />

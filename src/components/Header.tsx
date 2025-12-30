@@ -1,32 +1,16 @@
-import { Link, useNavigate } from '@tanstack/react-router'
-
-import { useState } from 'react'
-import {
-  ChevronDown,
-  ChevronRight,
-  Home,
-  LogOut,
-  Menu,
-  Network,
-  SquareFunction,
-  StickyNote,
-  User,
-  X,
-} from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
+import { LogOut, FileText } from 'lucide-react'
 import { signIn, signOut, useSession } from '@/lib/auth/auth-client'
+import { SidebarTrigger } from '@/components/ui/sidebar'
 
 export default function Header() {
-  const [isOpen, setIsOpen] = useState(false)
-  const [groupedExpanded, setGroupedExpanded] = useState<
-    Record<string, boolean>
-  >({})
   const { data: session, isPending } = useSession()
   const navigate = useNavigate()
 
   const handleSignIn = async () => {
     await signIn.social({
       provider: 'google',
-      callbackURL: '/',
+      callbackURL: '/editor',
     })
   }
 
@@ -41,201 +25,53 @@ export default function Header() {
   }
 
   return (
-    <>
-      <header className="p-4 flex items-center bg-gray-800 text-white shadow-lg justify-between">
-        <div className="flex items-center">
-          <button
-            onClick={() => setIsOpen(true)}
-            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-            aria-label="Open menu"
-          >
-            <Menu size={24} />
-          </button>
-          <h1 className="ml-4 text-xl font-semibold">
-            <Link to="/">
-              <img
-                src="/tanstack-word-logo-white.svg"
-                alt="TanStack Logo"
-                className="h-10"
-              />
-            </Link>
+    <header className="h-14 px-4 flex items-center justify-between bg-card border-b border-border shrink-0">
+      {/* Left side: Sidebar Trigger + Logo/Brand */}
+      <div className="flex items-center gap-3">
+        <SidebarTrigger />
+        
+        <div className="flex items-center gap-2">
+          <FileText size={20} className="text-github-blue" />
+          <h1 className="text-base font-bold tracking-tight">
+            MarkThree
           </h1>
         </div>
+      </div>
 
-        <div className="flex items-center gap-4">
-          {isPending ? (
-            <div className="h-8 w-8 animate-pulse bg-gray-700 rounded-full" />
-          ) : session ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm hidden sm:inline">
-                {session.user.name}
+      {/* User Section */}
+      <div className="flex items-center gap-3">
+        {isPending ? (
+          <div className="h-8 w-20 animate-pulse bg-muted rounded" />
+        ) : session ? (
+          <div className="flex items-center gap-3">
+            {/* User Info */}
+            <div className="hidden sm:flex items-center gap-2 text-sm">
+              <div className="w-7 h-7 rounded-full bg-github-blue/10 flex items-center justify-center text-github-blue font-bold text-xs">
+                {session.user.name?.charAt(0).toUpperCase() || 'U'}
+              </div>
+              <span className="text-muted-foreground max-w-[150px] truncate">
+                {session.user.email}
               </span>
-              <button
-                onClick={handleSignOut}
-                className="p-2 hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-2"
-                title="Sign Out"
-              >
-                <LogOut size={20} />
-              </button>
             </div>
-          ) : (
+
+            {/* Sign Out Button */}
             <button
-              onClick={handleSignIn}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+              onClick={handleSignOut}
+              className="p-2 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
+              title="Sign Out"
             >
-              <User size={18} />
-              Sign In with Google
-            </button>
-          )}
-        </div>
-      </header>
-
-      <aside
-        className={`fixed top-0 left-0 h-full w-80 bg-gray-900 text-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold">Navigation</h2>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-            aria-label="Close menu"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        <nav className="flex-1 p-4 overflow-y-auto">
-          <Link
-            to="/"
-            onClick={() => setIsOpen(false)}
-            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
-            activeProps={{
-              className:
-                'flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2',
-            }}
-          >
-            <Home size={20} />
-            <span className="font-medium">Home</span>
-          </Link>
-
-          {/* Demo Links Start */}
-
-          <Link
-            to="/demo/start/server-funcs"
-            onClick={() => setIsOpen(false)}
-            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
-            activeProps={{
-              className:
-                'flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2',
-            }}
-          >
-            <SquareFunction size={20} />
-            <span className="font-medium">Start - Server Functions</span>
-          </Link>
-
-          <Link
-            to="/demo/start/api-request"
-            onClick={() => setIsOpen(false)}
-            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
-            activeProps={{
-              className:
-                'flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2',
-            }}
-          >
-            <Network size={20} />
-            <span className="font-medium">Start - API Request</span>
-          </Link>
-
-          <div className="flex flex-row justify-between">
-            <Link
-              to="/demo/start/ssr"
-              onClick={() => setIsOpen(false)}
-              className="flex-1 flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
-              activeProps={{
-                className:
-                  'flex-1 flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2',
-              }}
-            >
-              <StickyNote size={20} />
-              <span className="font-medium">Start - SSR Demos</span>
-            </Link>
-            <button
-              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-              onClick={() =>
-                setGroupedExpanded((prev) => ({
-                  ...prev,
-                  StartSSRDemo: !prev.StartSSRDemo,
-                }))
-              }
-            >
-              {groupedExpanded.StartSSRDemo ? (
-                <ChevronDown size={20} />
-              ) : (
-                <ChevronRight size={20} />
-              )}
+              <LogOut size={18} />
             </button>
           </div>
-          {groupedExpanded.StartSSRDemo && (
-            <div className="flex flex-col ml-4">
-              <Link
-                to="/demo/start/ssr/spa-mode"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
-                activeProps={{
-                  className:
-                    'flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2',
-                }}
-              >
-                <StickyNote size={20} />
-                <span className="font-medium">SPA Mode</span>
-              </Link>
-
-              <Link
-                to="/demo/start/ssr/full-ssr"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
-                activeProps={{
-                  className:
-                    'flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2',
-                }}
-              >
-                <StickyNote size={20} />
-                <span className="font-medium">Full SSR</span>
-              </Link>
-
-              <Link
-                to="/demo/start/ssr/data-only"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
-                activeProps={{
-                  className:
-                    'flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2',
-                }}
-              >
-                <StickyNote size={20} />
-                <span className="font-medium">Data Only</span>
-              </Link>
-            </div>
-          )}
-
-          <Link
-            to="/demo/tanstack-query"
-            onClick={() => setIsOpen(false)}
-            className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
-            activeProps={{
-              className:
-                'flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2',
-            }}
+        ) : (
+          <button
+            onClick={handleSignIn}
+            className="px-4 py-2 bg-github-blue hover:bg-github-blue/90 rounded text-sm font-medium transition-colors text-white"
           >
-            <Network size={20} />
-            <span className="font-medium">TanStack Query</span>
-          </Link>
-
-          {/* Demo Links End */}
-        </nav>
-      </aside>
-    </>
+            Sign In
+          </button>
+        )}
+      </div>
+    </header>
   )
 }

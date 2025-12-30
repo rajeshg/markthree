@@ -8,8 +8,10 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 
 import Header from '../components/Header'
+import { Sidebar } from '../components/layout/Sidebar'
 import { ThemeProvider } from '../contexts/ThemeContext'
 import { SettingsProvider } from '../contexts/SettingsContext'
+import { SidebarProvider } from '../components/ui/sidebar'
 
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
 
@@ -67,12 +69,15 @@ function RootDocument() {
       <body>
         <ThemeProvider>
           <SettingsProvider>
-            <div className="flex flex-col min-h-screen bg-background text-foreground transition-colors duration-200 font-mono">
-              <Header />
+            <SidebarProvider defaultOpen>
+              <Sidebar />
               <main className="flex-1 flex flex-col overflow-hidden">
-                <Outlet />
+                <Header />
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <Outlet />
+                </div>
               </main>
-            </div>
+            </SidebarProvider>
             <TanStackDevtools
               config={{
                 position: 'bottom-right',
