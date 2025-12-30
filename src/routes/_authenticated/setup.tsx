@@ -1,41 +1,46 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
-import { FolderPlus, FolderOpen, Check } from 'lucide-react'
-import { useSettings } from '@/contexts/SettingsContext'
-import { driveApi } from '@/lib/drive/drive-client'
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { FolderPlus, FolderOpen, Check } from "lucide-react";
+import { useSettings } from "@/contexts/SettingsContext";
+import { driveApi } from "@/lib/drive/drive-client";
 
-export const Route = createFileRoute('/_authenticated/setup')({
+export const Route = createFileRoute("/_authenticated/setup")({
   component: SetupComponent,
-})
+});
 
 function SetupComponent() {
-  const { updateSettings } = useSettings()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const navigate = useNavigate()
+  const { updateSettings } = useSettings();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const handleCreateFolder = async () => {
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
     try {
-      const folder = await driveApi.createFolder('MarkThree Documents')
+      const folder = await driveApi.createFolder("MarkThree Documents");
       updateSettings({
         driveFolderId: folder.id,
         driveFolderName: folder.name,
-      })
-      navigate({ to: '/editor' })
+        currentFolderId: folder.id,
+        currentFolderName: folder.name,
+        folderPath: [],
+      });
+      navigate({ to: "/editor" });
     } catch (err: any) {
-      setError(err.message || 'Failed to create folder')
+      setError(err.message || "Failed to create folder");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handlePickFolder = async () => {
     // This will eventually use the Google Drive Picker API
     // For now, we'll just show the error that it's not implemented
-    setError('Drive Picker integration coming soon. Please use "Create Default Folder" for now.')
-  }
+    setError(
+      'Drive Picker integration coming soon. Please use "Create Default Folder" for now.',
+    );
+  };
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 bg-background">
@@ -57,10 +62,15 @@ function SetupComponent() {
               <FolderPlus className="text-github-blue" size={24} />
               <div className="text-left">
                 <div className="font-bold">Use Default Folder</div>
-                <div className="text-xs text-muted-foreground">Reuses or creates "MarkThree Documents" in your Drive</div>
+                <div className="text-xs text-muted-foreground">
+                  Reuses or creates "MarkThree Documents" in your Drive
+                </div>
               </div>
             </div>
-            <Check className="opacity-0 group-hover:opacity-100 text-github-blue transition-opacity" size={20} />
+            <Check
+              className="opacity-0 group-hover:opacity-100 text-github-blue transition-opacity"
+              size={20}
+            />
           </button>
 
           <button
@@ -72,10 +82,15 @@ function SetupComponent() {
               <FolderOpen className="text-github-blue" size={24} />
               <div className="text-left">
                 <div className="font-bold">Choose Existing Folder</div>
-                <div className="text-xs text-muted-foreground">Select a folder from your Google Drive</div>
+                <div className="text-xs text-muted-foreground">
+                  Select a folder from your Google Drive
+                </div>
               </div>
             </div>
-            <Check className="opacity-0 group-hover:opacity-100 text-github-blue transition-opacity" size={20} />
+            <Check
+              className="opacity-0 group-hover:opacity-100 text-github-blue transition-opacity"
+              size={20}
+            />
           </button>
         </div>
 
@@ -89,8 +104,8 @@ function SetupComponent() {
           <div className="text-center text-sm text-muted-foreground animate-pulse">
             Communicating with Google Drive...
           </div>
-        ) }
+        )}
       </div>
     </div>
-  )
+  );
 }

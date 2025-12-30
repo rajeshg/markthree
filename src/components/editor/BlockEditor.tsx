@@ -1,8 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { EditorBlock } from '@/types/editor';
-import { cn } from '@/lib/utils';
-import { driveApi } from '@/lib/drive/drive-client';
-import { codeToHtml } from 'shiki';
+import React, { useRef, useEffect, useState } from "react";
+import { EditorBlock } from "@/types/editor";
+import { cn } from "@/lib/utils";
+import { driveApi } from "@/lib/drive/drive-client";
+import { codeToHtml } from "shiki";
 
 interface BlockEditorProps {
   block: EditorBlock;
@@ -23,8 +23,8 @@ export function BlockEditor({
   isActive,
   lineNumberOffset,
   onMoveUp,
-  onMoveDown
-}: BlockEditorProps & { onMoveUp?: () => void, onMoveDown?: () => void }) {
+  onMoveDown,
+}: BlockEditorProps & { onMoveUp?: () => void; onMoveDown?: () => void }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [highlightedCode, setHighlightedCode] = useState<string | null>(null);
@@ -33,171 +33,208 @@ export function BlockEditor({
   useEffect(() => {
     const el = textareaRef.current;
     if (el) {
-      el.style.height = 'auto';
+      el.style.height = "auto";
       el.style.height = `${el.scrollHeight}px`;
     }
   }, [block.content]);
 
   // Fetch image URL if it's an image block
   useEffect(() => {
-    if (block.type !== 'image' || !block.metadata?.src) {
+    if (block.type !== "image" || !block.metadata?.src) {
       return;
     }
 
     const src = block.metadata.src;
-    console.log('[BlockEditor] Processing image block:', src);
+    console.log("[BlockEditor] Processing image block:", src);
 
     // If src is a drive ID, fetch as blob and create object URL
-    if (!src.startsWith('http')) {
-      driveApi.getFileBlob(src)
+    if (!src.startsWith("http")) {
+      driveApi
+        .getFileBlob(src)
         .then((blob) => {
           const objectUrl = URL.createObjectURL(blob);
-          console.log('[BlockEditor] Object URL created:', objectUrl);
+          console.log("[BlockEditor] Object URL created:", objectUrl);
           setImgUrl(objectUrl);
         })
         .catch((err) => {
-          console.error('[BlockEditor] Failed to load image blob:', err);
+          console.error("[BlockEditor] Failed to load image blob:", err);
           // Fallback to legacy URL
-          console.log('[BlockEditor] Attempting fallback with token-based URL');
-          driveApi
-            .getImageUrl(src)
-            .then((url) => {
-              if (url) {
-                console.log('[BlockEditor] Fallback URL set:', url);
-                setImgUrl(url);
-              } else {
-                console.error('[BlockEditor] Fallback URL was empty');
-              }
-            });
+          console.log("[BlockEditor] Attempting fallback with token-based URL");
+          driveApi.getImageUrl(src).then((url) => {
+            if (url) {
+              console.log("[BlockEditor] Fallback URL set:", url);
+              setImgUrl(url);
+            } else {
+              console.error("[BlockEditor] Fallback URL was empty");
+            }
+          });
         });
     } else {
-      console.log('[BlockEditor] Using direct URL:', src);
+      console.log("[BlockEditor] Using direct URL:", src);
       setImgUrl(src);
     }
   }, [block.type, block.metadata?.src]);
 
   useEffect(() => {
-    if (block.type === 'code') {
+    if (block.type === "code") {
       codeToHtml(block.content, {
-        lang: block.metadata?.language || 'typescript',
-        theme: 'github-dark'
+        lang: block.metadata?.language || "typescript",
+        theme: "github-dark",
       }).then(setHighlightedCode);
     }
   }, [block.type, block.content, block.metadata?.language]);
 
   const getBlockStyle = () => {
     switch (block.type) {
-      case 'h1': return 'text-2xl font-bold text-github-blue mt-4 mb-2';
-      case 'h2': return 'text-xl font-bold text-github-blue mt-3 mb-1';
-      case 'h3': return 'text-lg font-bold text-github-blue mt-2';
-      case 'blockquote': return 'border-l-4 border-muted-foreground/30 pl-4 italic text-muted-foreground';
-      case 'code': return 'font-mono bg-card/50 p-4 rounded-md border border-border text-sm my-2';
-      case 'hr': return 'border-t-2 border-border my-6 py-0 pointer-events-none';
-      case 'checkbox': return 'text-base leading-relaxed flex items-start gap-3 transition-opacity duration-300';
-      case 'image': return 'my-4 flex flex-col gap-2 group/image';
-      default: return 'text-base leading-relaxed';
+      case "h1":
+        return "text-2xl font-bold text-github-blue mt-4 mb-2";
+      case "h2":
+        return "text-xl font-bold text-github-blue mt-3 mb-1";
+      case "h3":
+        return "text-lg font-bold text-github-blue mt-2";
+      case "blockquote":
+        return "border-l-4 border-muted-foreground/30 pl-4 italic text-muted-foreground";
+      case "code":
+        return "font-mono bg-card/50 p-4 rounded-md border border-border text-sm my-2";
+      case "hr":
+        return "border-t-2 border-border my-6 py-0 pointer-events-none";
+      case "checkbox":
+        return "text-base leading-relaxed flex items-start gap-3 transition-opacity duration-300";
+      case "image":
+        return "my-4 flex flex-col gap-2 group/image";
+      default:
+        return "text-base leading-relaxed";
     }
   };
 
   return (
-    <div className={cn(
-      "group relative flex items-start gap-4 py-0.5 transition-colors duration-75",
-      isActive && "bg-github-blue/5",
-      block.type === 'checkbox' && block.metadata?.status === 'in_progress' && "bg-github-yellow/[0.03]",
-      block.type === 'checkbox' && block.metadata?.status === 'done' && "opacity-40",
-      block.type === 'image' && "bg-transparent"
-    )}>
+    <div
+      className={cn(
+        "group relative flex items-start gap-4 py-0.5 transition-colors duration-75",
+        isActive && "bg-github-blue/5",
+        block.type === "checkbox" &&
+          block.metadata?.status === "in_progress" &&
+          "bg-github-yellow/[0.03]",
+        block.type === "checkbox" &&
+          block.metadata?.status === "done" &&
+          "opacity-40",
+        block.type === "image" && "bg-transparent",
+      )}
+    >
       {/* Gutter / Line Numbers */}
       <div className="w-12 pt-1.5 text-right text-[10px] text-muted-foreground/30 select-none font-mono shrink-0">
-        {showLineNumbers ? lineNumberOffset : ''}
+        {showLineNumbers ? lineNumberOffset : ""}
       </div>
 
-      <div className={cn("flex-1 min-h-[1.5em] relative flex items-start gap-3", getBlockStyle())}>
+      <div
+        className={cn(
+          "flex-1 min-h-[1.5em] relative flex items-start gap-3",
+          getBlockStyle(),
+        )}
+      >
         {/* Formatting Toolbar / Slash Menu */}
-        {isActive && block.content === '' && (
+        {isActive && block.content === "" && (
           <div className="absolute -top-8 left-0 flex items-center gap-1 bg-card border border-border px-2 py-1 rounded shadow-xl z-50 animate-in fade-in slide-in-from-bottom-2">
-            <button 
+            <button
               onMouseDown={(e) => {
                 e.preventDefault();
-                onUpdate({ type: 'h1' });
+                onUpdate({ type: "h1" });
               }}
               className="p-1 hover:bg-accent rounded text-[10px] font-bold"
-            >H1</button>
-            <button 
+            >
+              H1
+            </button>
+            <button
               onMouseDown={(e) => {
                 e.preventDefault();
-                onUpdate({ type: 'h2' });
+                onUpdate({ type: "h2" });
               }}
               className="p-1 hover:bg-accent rounded text-[10px] font-bold"
-            >H2</button>
-            <button 
+            >
+              H2
+            </button>
+            <button
               onMouseDown={(e) => {
                 e.preventDefault();
-                onUpdate({ type: 'checkbox', metadata: { status: 'todo' } });
+                onUpdate({ type: "checkbox", metadata: { status: "todo" } });
               }}
               className="p-1 hover:bg-accent rounded text-[10px] font-bold"
-            >TODO</button>
-             <button 
+            >
+              TODO
+            </button>
+            <button
               onMouseDown={(e) => {
                 e.preventDefault();
-                onUpdate({ type: 'code' });
+                onUpdate({ type: "code" });
               }}
               className="p-1 hover:bg-accent rounded text-[10px] font-bold"
-            >CODE</button>
-            <button 
+            >
+              CODE
+            </button>
+            <button
               onMouseDown={(e) => {
                 e.preventDefault();
-                onUpdate({ type: 'blockquote' });
+                onUpdate({ type: "blockquote" });
               }}
               className="p-1 hover:bg-accent rounded text-[10px] font-bold uppercase"
-            >Quote</button>
-            {block.type !== 'image' && (
+            >
+              Quote
+            </button>
+            {block.type !== "image" && (
               <>
                 <div className="w-[1px] h-3 bg-border mx-1" />
-                <button 
+                <button
                   onMouseDown={(e) => {
                     e.preventDefault();
                     onMoveUp?.();
                   }}
                   className="p-1 hover:bg-accent rounded text-[10px] font-bold uppercase"
-                >↑</button>
-                <button 
+                >
+                  ↑
+                </button>
+                <button
                   onMouseDown={(e) => {
                     e.preventDefault();
                     onMoveDown?.();
                   }}
                   className="p-1 hover:bg-accent rounded text-[10px] font-bold uppercase"
-                >↓</button>
+                >
+                  ↓
+                </button>
               </>
             )}
           </div>
         )}
 
         {/* Slash Menu (Experimental) */}
-        {isActive && block.content === '/' && (
+        {isActive && block.content === "/" && (
           <div className="absolute top-8 left-0 w-48 bg-card border border-border rounded-md shadow-2xl z-50 overflow-hidden animate-in zoom-in-95 duration-75">
             <div className="px-2 py-1.5 border-b border-border bg-accent/50">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Commands</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                Commands
+              </span>
             </div>
             <div className="p-1 flex flex-col gap-0.5">
               {[
-                { label: 'H1 Header', icon: 'H1', type: 'h1' },
-                { label: 'H2 Header', icon: 'H2', type: 'h2' },
-                { label: 'H3 Header', icon: 'H3', type: 'h3' },
-                { label: 'Task List', icon: '[ ]', type: 'checkbox' },
-                { label: 'Code Block', icon: '</>', type: 'code' },
-                { label: 'Quote', icon: '“', type: 'blockquote' },
-                { label: 'Divider', icon: '—', type: 'hr' },
+                { label: "H1 Header", icon: "H1", type: "h1" },
+                { label: "H2 Header", icon: "H2", type: "h2" },
+                { label: "H3 Header", icon: "H3", type: "h3" },
+                { label: "Task List", icon: "[ ]", type: "checkbox" },
+                { label: "Code Block", icon: "</>", type: "code" },
+                { label: "Quote", icon: "“", type: "blockquote" },
+                { label: "Divider", icon: "—", type: "hr" },
               ].map((item) => (
                 <button
                   key={item.type}
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    onUpdate({ type: item.type as any, content: '' });
+                    onUpdate({ type: item.type as any, content: "" });
                   }}
                   className="w-full flex items-center gap-3 px-2 py-1.5 hover:bg-accent rounded text-left transition-colors group"
                 >
-                  <span className="w-6 h-6 flex items-center justify-center bg-background border border-border rounded text-[10px] font-bold group-hover:text-github-blue group-hover:border-github-blue/30">{item.icon}</span>
+                  <span className="w-6 h-6 flex items-center justify-center bg-background border border-border rounded text-[10px] font-bold group-hover:text-github-blue group-hover:border-github-blue/30">
+                    {item.icon}
+                  </span>
                   <span className="text-xs font-medium">{item.label}</span>
                 </button>
               ))}
@@ -205,20 +242,28 @@ export function BlockEditor({
           </div>
         )}
 
-        {block.type === 'image' ? (
+        {block.type === "image" ? (
           <div className="w-full flex flex-col gap-2 group/image-block">
             {/* Image Preview with Overlay Controls */}
             <div className="relative rounded-md border border-border bg-card overflow-hidden w-full sm:max-w-md group/preview">
               {imgUrl ? (
-                <img 
-                  src={imgUrl} 
-                  alt={block.content || 'Image'} 
+                <img
+                  src={imgUrl}
+                  alt={block.content || "Image"}
                   className="w-full h-auto max-h-64 sm:max-h-56 object-contain"
-                  onLoad={() => console.log('[IMG] Image loaded successfully from:', imgUrl.substring(0, 50))}
+                  onLoad={() =>
+                    console.log(
+                      "[IMG] Image loaded successfully from:",
+                      imgUrl.substring(0, 50),
+                    )
+                  }
                   onError={(e) => {
-                    console.error('[IMG] Image failed to load from:', imgUrl.substring(0, 100));
-                    console.error('[IMG] Image element:', e.currentTarget);
-                    e.currentTarget.style.display = 'none';
+                    console.error(
+                      "[IMG] Image failed to load from:",
+                      imgUrl.substring(0, 100),
+                    );
+                    console.error("[IMG] Image element:", e.currentTarget);
+                    e.currentTarget.style.display = "none";
                   }}
                   loading="lazy"
                   decoding="async"
@@ -226,14 +271,26 @@ export function BlockEditor({
               ) : (
                 <div className="h-40 sm:h-48 flex items-center justify-center animate-pulse text-muted-foreground/20">
                   <div className="flex flex-col items-center gap-2">
-                    <svg className="w-8 h-8 sm:w-10 sm:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    <svg
+                      className="w-8 h-8 sm:w-10 sm:h-10"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
                     </svg>
-                    <span className="text-xs uppercase tracking-widest font-bold">Loading...</span>
+                    <span className="text-xs uppercase tracking-widest font-bold">
+                      Loading...
+                    </span>
                   </div>
                 </div>
               )}
-              
+
               {/* Overlay Controls - Top Right */}
               <div className="absolute top-2 right-2 flex gap-1 opacity-0 sm:group-hover/preview:opacity-100 sm:opacity-0 opacity-100 transition-opacity">
                 {onMoveUp && (
@@ -272,10 +329,12 @@ export function BlockEditor({
 
             {/* Compact Markdown Editor Below Image */}
             <div className="flex items-start gap-2 w-full sm:max-w-md">
-              <span className="text-[10px] text-muted-foreground/40 font-mono shrink-0 pt-1">MD:</span>
+              <span className="text-[10px] text-muted-foreground/40 font-mono shrink-0 pt-1">
+                MD:
+              </span>
               <textarea
                 ref={textareaRef}
-                value={`![${block.content}](${block.metadata?.src || ''})`}
+                value={`![${block.content}](${block.metadata?.src || ""})`}
                 onChange={(e) => {
                   const val = e.target.value;
                   // Parse markdown image syntax: ![alt](src)
@@ -299,46 +358,61 @@ export function BlockEditor({
           </div>
         ) : (
           <>
-            {block.type === 'checkbox' && (
+            {block.type === "checkbox" && (
               <div className="flex flex-col items-center pt-1 shrink-0">
-                <button 
+                <button
                   onClick={() => {
-                    const currentStatus = block.metadata?.status || 'todo';
-                    const nextStatus = currentStatus === 'todo' ? 'in_progress' : (currentStatus === 'in_progress' ? 'done' : 'todo');
-                    onUpdate({ metadata: { ...block.metadata, status: nextStatus } });
+                    const currentStatus = block.metadata?.status || "todo";
+                    const nextStatus =
+                      currentStatus === "todo"
+                        ? "in_progress"
+                        : currentStatus === "in_progress"
+                          ? "done"
+                          : "todo";
+                    onUpdate({
+                      metadata: { ...block.metadata, status: nextStatus },
+                    });
                   }}
                   className={cn(
                     "font-mono text-xs flex items-center justify-center transition-all duration-200",
-                    block.metadata?.status === 'done' && "text-github-green",
-                    block.metadata?.status === 'in_progress' && "text-github-yellow",
-                    block.metadata?.status === 'todo' && "text-muted-foreground/40 hover:text-muted-foreground"
+                    block.metadata?.status === "done" && "text-github-green",
+                    block.metadata?.status === "in_progress" &&
+                      "text-github-yellow",
+                    block.metadata?.status === "todo" &&
+                      "text-muted-foreground/40 hover:text-muted-foreground",
                   )}
                 >
                   <span className="flex items-center tracking-tighter font-bold">
-                    [<span className="w-3 flex justify-center items-center">
-                      {block.metadata?.status === 'done' ? (
+                    [
+                    <span className="w-3 flex justify-center items-center">
+                      {block.metadata?.status === "done" ? (
                         <span>x</span>
-                      ) : block.metadata?.status === 'in_progress' ? (
+                      ) : block.metadata?.status === "in_progress" ? (
                         <span className="w-1.5 h-1.5 rounded-full bg-github-yellow animate-pulse shadow-[0_0_4px_currentColor]" />
                       ) : (
                         <span className="w-1.5" />
                       )}
-                    </span>]
+                    </span>
+                    ]
                   </span>
                 </button>
-                {block.metadata?.status === 'in_progress' && (
-                  <span className="text-[6px] font-bold text-github-yellow/50 mt-0.5 tracking-tighter animate-pulse uppercase">Run</span>
+                {block.metadata?.status === "in_progress" && (
+                  <span className="text-[6px] font-bold text-github-yellow/50 mt-0.5 tracking-tighter animate-pulse uppercase">
+                    Run
+                  </span>
                 )}
-                {block.metadata?.status === 'done' && (
-                  <span className="text-[6px] font-bold text-github-green/50 mt-0.5 tracking-tighter uppercase">Done</span>
+                {block.metadata?.status === "done" && (
+                  <span className="text-[6px] font-bold text-github-green/50 mt-0.5 tracking-tighter uppercase">
+                    Done
+                  </span>
                 )}
               </div>
             )}
-            
-            {block.type === 'hr' ? (
+
+            {block.type === "hr" ? (
               <div className="w-full border-t border-border mt-3" />
-            ) : block.type === 'code' && !isActive && highlightedCode ? (
-              <div 
+            ) : block.type === "code" && !isActive && highlightedCode ? (
+              <div
                 className="w-full font-mono text-sm p-0 overflow-x-auto"
                 dangerouslySetInnerHTML={{ __html: highlightedCode }}
                 onClick={onFocus}
@@ -350,63 +424,82 @@ export function BlockEditor({
                 value={block.content}
                 onChange={(e) => {
                   const val = e.target.value;
-                  
+
                   // Auto-convert block types based on prefixes
-                  if (val.startsWith('# ')) {
-                    onUpdate({ type: 'h1', content: val.substring(2) });
+                  if (val.startsWith("# ")) {
+                    onUpdate({ type: "h1", content: val.substring(2) });
                     return;
                   }
-                  if (val.startsWith('## ')) {
-                    onUpdate({ type: 'h2', content: val.substring(3) });
+                  if (val.startsWith("## ")) {
+                    onUpdate({ type: "h2", content: val.substring(3) });
                     return;
                   }
-                  if (val.startsWith('### ')) {
-                    onUpdate({ type: 'h3', content: val.substring(4) });
+                  if (val.startsWith("### ")) {
+                    onUpdate({ type: "h3", content: val.substring(4) });
                     return;
                   }
-                  if (val.startsWith('> ')) {
-                    onUpdate({ type: 'blockquote', content: val.substring(2) });
+                  if (val.startsWith("> ")) {
+                    onUpdate({ type: "blockquote", content: val.substring(2) });
                     return;
                   }
-                  if (val.startsWith('- [ ] ')) {
-                    onUpdate({ type: 'checkbox', content: val.substring(6), metadata: { status: 'todo' } });
+                  if (val.startsWith("- [ ] ")) {
+                    onUpdate({
+                      type: "checkbox",
+                      content: val.substring(6),
+                      metadata: { status: "todo" },
+                    });
                     return;
                   }
-                  if (val.startsWith('- [/] ')) {
-                    onUpdate({ type: 'checkbox', content: val.substring(6), metadata: { status: 'in_progress' } });
+                  if (val.startsWith("- [/] ")) {
+                    onUpdate({
+                      type: "checkbox",
+                      content: val.substring(6),
+                      metadata: { status: "in_progress" },
+                    });
                     return;
                   }
-                  if (val.startsWith('- [x] ')) {
-                    onUpdate({ type: 'checkbox', content: val.substring(6), metadata: { status: 'done' } });
+                  if (val.startsWith("- [x] ")) {
+                    onUpdate({
+                      type: "checkbox",
+                      content: val.substring(6),
+                      metadata: { status: "done" },
+                    });
                     return;
                   }
-                  if (val.startsWith('- ') || val.startsWith('* ')) {
-                    onUpdate({ type: 'ul', content: val.substring(2) });
+                  if (val.startsWith("- ") || val.startsWith("* ")) {
+                    onUpdate({ type: "ul", content: val.substring(2) });
                     return;
                   }
                   if (/^\d+\. /.test(val)) {
-                    onUpdate({ type: 'ol', content: val.replace(/^\d+\. /, '') });
+                    onUpdate({
+                      type: "ol",
+                      content: val.replace(/^\d+\. /, ""),
+                    });
                     return;
                   }
-                  if (val.startsWith('```')) {
-                    onUpdate({ type: 'code', content: '', metadata: { language: val.substring(3).trim() } });
+                  if (val.startsWith("```")) {
+                    onUpdate({
+                      type: "code",
+                      content: "",
+                      metadata: { language: val.substring(3).trim() },
+                    });
                     return;
                   }
-                  if (val.startsWith('---')) {
-                    onUpdate({ type: 'hr', content: '' });
+                  if (val.startsWith("---")) {
+                    onUpdate({ type: "hr", content: "" });
                     return;
                   }
 
                   // Emoji shortcodes (basic set)
                   const emojiMap: Record<string, string> = {
-                    ':done:': '✅',
-                    ':todo:': '📝',
-                    ':fire:': '🔥',
-                    ':rocket:': '🚀',
-                    ':bug:': '🐛',
-                    ':warn:': '⚠️',
+                    ":done:": "✅",
+                    ":todo:": "📝",
+                    ":fire:": "🔥",
+                    ":rocket:": "🚀",
+                    ":bug:": "🐛",
+                    ":warn:": "⚠️",
                   };
-                  
+
                   let newContent = val;
                   Object.entries(emojiMap).forEach(([short, emoji]) => {
                     newContent = newContent.replace(short, emoji);
@@ -423,12 +516,12 @@ export function BlockEditor({
                 onKeyDown={(e) => {
                   // Smart Auto-pairing
                   const pairs: Record<string, string> = {
-                    '(': ')',
-                    '[': ']',
-                    '{': '}',
+                    "(": ")",
+                    "[": "]",
+                    "{": "}",
                     '"': '"',
                     "'": "'",
-                    '`': '`',
+                    "`": "`",
                   };
 
                   if (pairs[e.key]) {
@@ -437,15 +530,21 @@ export function BlockEditor({
                     const end = e.currentTarget.selectionEnd;
                     const val = e.currentTarget.value;
                     const selection = val.substring(start, end);
-                    const newVal = val.substring(0, start) + e.key + selection + pairs[e.key] + val.substring(end);
-                    
+                    const newVal =
+                      val.substring(0, start) +
+                      e.key +
+                      selection +
+                      pairs[e.key] +
+                      val.substring(end);
+
                     onUpdate({ content: newVal });
-                    
+
                     // Set cursor position after update
                     setTimeout(() => {
                       if (textareaRef.current) {
                         textareaRef.current.selectionStart = start + 1;
-                        textareaRef.current.selectionEnd = start + 1 + selection.length;
+                        textareaRef.current.selectionEnd =
+                          start + 1 + selection.length;
                       }
                     }, 0);
                     return;
@@ -456,8 +555,10 @@ export function BlockEditor({
                 rows={1}
                 className={cn(
                   "w-full bg-transparent border-none focus:ring-0 resize-none p-0 overflow-hidden leading-relaxed focus:outline-none placeholder:opacity-20 transition-all",
-                  block.type === 'code' && "font-mono",
-                  block.type === 'checkbox' && block.metadata?.status === 'done' && "line-through opacity-50"
+                  block.type === "code" && "font-mono",
+                  block.type === "checkbox" &&
+                    block.metadata?.status === "done" &&
+                    "line-through opacity-50",
                 )}
                 placeholder="..."
                 spellCheck={false}
@@ -467,9 +568,9 @@ export function BlockEditor({
         )}
 
         {/* Code Language Indicator */}
-        {block.type === 'code' && (
+        {block.type === "code" && (
           <div className="absolute top-0 right-0 p-1 text-[10px] text-muted-foreground/50 uppercase font-mono">
-            {block.metadata?.language || 'text'}
+            {block.metadata?.language || "text"}
           </div>
         )}
       </div>

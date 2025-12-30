@@ -1,29 +1,82 @@
-import { auth } from '@/lib/auth/auth'
-import { createServerFn } from '@tanstack/react-start'
-import { getRequest } from '@tanstack/react-start/server'
-import Database from 'better-sqlite3'
+import { auth } from "@/lib/auth/auth";
+import { createFileRoute } from "@tanstack/react-router";
+import Database from "better-sqlite3";
 
-export const getDriveToken = createServerFn({ method: 'GET' })
-  .handler(async () => {
-    const request = getRequest()
-    if (!request) return null
+export const Route = createFileRoute("/api/drive/token")({
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        try {
+          const session = await auth.api.getSession({
+            headers: request.headers,
+          });
 
-    const session = await auth.api.getSession({
-        headers: request.headers
-    })
+          if (!session) {
+            return new Response(JSON.stringify({ error: "Unauthorized" }), {
+              status: 401,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
 
-    if (!session) return null
+          // Better-Auth API filters out accessToken. We'll fetch it directly from the DB.
+          const db = new Database("./sqlite.db");
+          const account = db
+            .prepare(
+              "SELECT accessToken FROM account WHERE userId = ? AND providerId = ?",
+            )
+            .get(session.user.id, "google") as
+            | { accessToken: string }
+            | undefined;
+          db.close();
 
-    // Better-Auth API filters out accessToken. We'll fetch it directly from the DB.
-    // Since we are in a server function, we can access the same SQLite database.
-    try {
-      const db = new Database('./sqlite.db')
-      const account = db.prepare('SELECT accessToken FROM account WHERE userId = ? AND providerId = ?').get(session.user.id, 'google') as { accessToken: string } | undefined
-      db.close()
-      
-      return account?.accessToken || null
-    } catch (err) {
-      console.error('DEBUG: Direct DB access failed', err)
-      return null
+          if (!account?.accessToken) {
+            return new Response(
+              JSON.stringify({ error: "No access token found" }),
+              {
+                status: 401,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          }
+
+          return new Response(account.accessToken, {
+            headers: { "Content-Type": "text/plain" },
+          });
+        } catch (err) {
+          console.error("Token retrieval error:", err);
+          return new Response(
+            JSON.stringify({ error: "Internal server error" }),
+            {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+      },
+    },
+  },
+});
+
+// Export the function for backward compatibility
+export async function getDriveToken(): Promise<string | null> {
+  try {
+    const response = await fetch("/api/drive/token", {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        console.log("[Auth] User not authenticated");
+        return null;
+      }
+      console.error("Failed to get drive token:", response.status);
+      return null;
     }
-  })
+
+    const token = await response.text();
+    return token || null;
+  } catch (err) {
+    console.error("Error getting drive token:", err);
+    return null;
+  }
+}

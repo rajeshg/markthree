@@ -1,4 +1,4 @@
-import { getDriveToken } from '@/routes/api/drive/token';
+import { getDriveToken } from "@/routes/api/drive/token";
 
 export interface DriveFile {
   id: string;
@@ -13,14 +13,27 @@ export interface DriveFolder {
   name: string;
 }
 
-const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3/files';
-const UPLOAD_API_BASE = 'https://www.googleapis.com/upload/drive/v3/files';
+// Utility function to handle authentication failures
+function handleAuthFailure() {
+  // Clear any cached data
+  if (typeof window !== "undefined") {
+    // Small delay to show the message in console
+    setTimeout(() => {
+      window.location.href = "/";
+    }, 100);
+  }
+}
+
+const DRIVE_API_BASE = "https://www.googleapis.com/drive/v3/files";
+const UPLOAD_API_BASE = "https://www.googleapis.com/upload/drive/v3/files";
 
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const token = await getDriveToken();
-  
+
   if (!token) {
-    throw new Error('Not authenticated with Google Drive');
+    // Redirect to login if no token available
+    handleAuthFailure();
+    throw new Error("Not authenticated with Google Drive");
   }
 
   const response = await fetch(url, {
@@ -32,8 +45,16 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
+    // Handle authentication errors by redirecting to login
+    if (response.status === 401 || response.status === 403) {
+      handleAuthFailure();
+      throw new Error("Authentication expired. Redirecting to login...");
+    }
+
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || `Drive API error: ${response.status}`);
+    throw new Error(
+      error.error?.message || `Drive API error: ${response.status}`,
+    );
   }
 
   if (response.status === 204) return null;
@@ -42,10 +63,31 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 
 export const driveApi = {
   async listFiles(folderId: string): Promise<DriveFile[]> {
-    const query = `'${folderId}' in parents and trashed = false and mimeType = 'text/markdown'`;
+    const query = `'${folderId}' in parents and trashed = false`;
     const url = `${DRIVE_API_BASE}?q=${encodeURIComponent(query)}&fields=files(id, name, mimeType, modifiedTime)&orderBy=modifiedTime desc`;
     const data = await fetchWithAuth(url);
-    return data.files;
+
+    // Sort items: folders first, then .md files, then others, all by modifiedTime desc
+    const items = data.files || [];
+    return items.sort((a: DriveFile, b: DriveFile) => {
+      const aIsFolder = a.mimeType === "application/vnd.google-apps.folder";
+      const bIsFolder = b.mimeType === "application/vnd.google-apps.folder";
+      const aIsMd = a.name.toLowerCase().endsWith(".md");
+      const bIsMd = b.name.toLowerCase().endsWith(".md");
+
+      // Folders first
+      if (aIsFolder && !bIsFolder) return -1;
+      if (!aIsFolder && bIsFolder) return 1;
+
+      // Within same type, .md files before other files
+      if (!aIsFolder && !bIsFolder) {
+        if (aIsMd && !bIsMd) return -1;
+        if (!aIsMd && bIsMd) return 1;
+      }
+
+      // If same type, sort by modifiedTime desc (already done by API)
+      return 0;
+    });
   },
 
   async getFileMetadata(fileId: string): Promise<DriveFile> {
@@ -61,35 +103,39 @@ export const driveApi = {
         Authorization: `Bearer ${token}`,
       },
     });
-    if (!response.ok) throw new Error('Failed to fetch file content');
+    if (!response.ok) throw new Error("Failed to fetch file content");
     return response.text();
   },
 
-  async createFile(name: string, content: string, folderId: string): Promise<DriveFile> {
+  async createFile(
+    name: string,
+    content: string,
+    folderId: string,
+  ): Promise<DriveFile> {
     const metadata = {
       name,
-      mimeType: 'text/markdown',
+      mimeType: "text/markdown",
       parents: [folderId],
     };
 
-    const boundary = '-------314159265358979323846';
+    const boundary = "-------314159265358979323846";
     const delimiter = `\r\n--${boundary}\r\n`;
     const closeDelimiter = `\r\n--${boundary}--`;
 
     const body =
       delimiter +
-      'Content-Type: application/json\r\n\r\n' +
+      "Content-Type: application/json\r\n\r\n" +
       JSON.stringify(metadata) +
       delimiter +
-      'Content-Type: text/markdown\r\n\r\n' +
+      "Content-Type: text/markdown\r\n\r\n" +
       content +
       closeDelimiter;
 
     const url = `${UPLOAD_API_BASE}?uploadType=multipart&fields=id,name,mimeType,modifiedTime`;
     return fetchWithAuth(url, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': `multipart/related; boundary=${boundary}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
       },
       body,
     });
@@ -98,9 +144,9 @@ export const driveApi = {
   async updateFile(fileId: string, content: string): Promise<void> {
     const url = `${UPLOAD_API_BASE}/${fileId}?uploadType=media`;
     await fetchWithAuth(url, {
-      method: 'PATCH',
+      method: "PATCH",
       headers: {
-        'Content-Type': 'text/markdown',
+        "Content-Type": "text/markdown",
       },
       body: content,
     });
@@ -109,18 +155,20 @@ export const driveApi = {
   async renameFile(fileId: string, newName: string): Promise<void> {
     const url = `${DRIVE_API_BASE}/${fileId}`;
     await fetchWithAuth(url, {
-      method: 'PATCH',
+      method: "PATCH",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name: newName.endsWith('.md') ? newName : `${newName}.md` }),
+      body: JSON.stringify({
+        name: newName.endsWith(".md") ? newName : `${newName}.md`,
+      }),
     });
   },
 
   async deleteFile(fileId: string): Promise<void> {
     const url = `${DRIVE_API_BASE}/${fileId}`;
     await fetchWithAuth(url, {
-      method: 'DELETE',
+      method: "DELETE",
     });
   },
 
@@ -128,19 +176,19 @@ export const driveApi = {
     const query = `name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
     const url = `${DRIVE_API_BASE}?q=${encodeURIComponent(query)}&fields=files(id, name)`;
     const existing = await fetchWithAuth(url);
-    
+
     if (existing.files && existing.files.length > 0) {
       return existing.files[0];
     }
 
     const metadata = {
       name,
-      mimeType: 'application/vnd.google-apps.folder',
+      mimeType: "application/vnd.google-apps.folder",
     };
     return fetchWithAuth(DRIVE_API_BASE, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(metadata),
     });
@@ -153,7 +201,7 @@ export const driveApi = {
       parents: [folderId],
     };
 
-    const boundary = '-------314159265358979323846';
+    const boundary = "-------314159265358979323846";
     const delimiter = `\r\n--${boundary}\r\n`;
     const closeDelimiter = `\r\n--${boundary}--`;
 
@@ -166,7 +214,7 @@ export const driveApi = {
 
     const metadataPart =
       delimiter +
-      'Content-Type: application/json\r\n\r\n' +
+      "Content-Type: application/json\r\n\r\n" +
       JSON.stringify(metadata) +
       delimiter +
       `Content-Type: ${file.type}\r\n\r\n`;
@@ -174,17 +222,19 @@ export const driveApi = {
     // Combine metadata and binary file content
     const metadataBuffer = new TextEncoder().encode(metadataPart);
     const closeBuffer = new TextEncoder().encode(closeDelimiter);
-    
-    const body = new Uint8Array(metadataBuffer.length + fileContent.byteLength + closeBuffer.length);
+
+    const body = new Uint8Array(
+      metadataBuffer.length + fileContent.byteLength + closeBuffer.length,
+    );
     body.set(metadataBuffer);
     body.set(new Uint8Array(fileContent), metadataBuffer.length);
     body.set(closeBuffer, metadataBuffer.length + fileContent.byteLength);
 
     const url = `${UPLOAD_API_BASE}?uploadType=multipart&fields=id,name,mimeType`;
     return fetchWithAuth(url, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': `multipart/related; boundary=${boundary}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`,
       },
       body,
     });
@@ -193,37 +243,33 @@ export const driveApi = {
   async getFileBlob(fileId: string): Promise<Blob> {
     const token = await getDriveToken();
     if (!token) {
-      throw new Error('No authentication token available');
+      throw new Error("No authentication token available");
     }
     const url = `${DRIVE_API_BASE}/${fileId}?alt=media`;
-    console.log('[Drive] Fetching blob for:', fileId);
-    
+
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[Drive] Blob fetch failed (${response.status}):`, errorText);
-      throw new Error(`Failed to fetch image (${response.status}): ${errorText}`);
+      throw new Error(
+        `Failed to fetch image (${response.status}): ${errorText}`,
+      );
     }
-    
+
     const blob = await response.blob();
-    console.log('[Drive] Blob fetched successfully:', blob.type, blob.size, 'bytes');
     return blob;
   },
 
   async getImageUrl(fileId: string): Promise<string> {
     const token = await getDriveToken();
     if (!token) {
-      console.warn('[Drive] No token available for image URL');
-      return '';
+      return "";
     }
     const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&access_token=${token}`;
-    console.log('[Drive] Generated image URL for:', fileId);
     return url;
-  }
-
+  },
 };

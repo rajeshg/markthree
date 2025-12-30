@@ -3,13 +3,13 @@ import { tanstackStartCookies } from "better-auth/tanstack-start";
 import Database from "better-sqlite3";
 
 export const auth = betterAuth({
-    database: new Database("./sqlite.db"),
-    socialProviders: {
-        google: {
-            clientId: process.env.GOOGLE_CLIENT_ID || '',
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-            scope: ['https://www.googleapis.com/auth/drive.file', 'email', 'profile']
-        },
+  database: new Database("./sqlite.db"),
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID || "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+      scope: ["https://www.googleapis.com/auth/drive.file", "email", "profile"],
     },
-    plugins: [tanstackStartCookies()]
-})
+  },
+  plugins: [tanstackStartCookies()],
+});

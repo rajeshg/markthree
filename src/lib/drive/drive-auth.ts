@@ -1,29 +1,24 @@
-import { auth } from '@/lib/auth/auth'
-import { createServerFn } from '@tanstack/react-start'
-import { getRequest } from '@tanstack/react-start/server'
-import Database from 'better-sqlite3'
+// This file is now deprecated - the token retrieval is handled by the API route
+// Keeping it for backward compatibility during migration
+export async function getDriveToken(): Promise<string | null> {
+  try {
+    const response = await fetch("/api/drive/token", {
+      method: "GET",
+    });
 
-export const getDriveToken = createServerFn({ method: 'GET' })
-  .handler(async () => {
-    const request = getRequest()
-    if (!request) return null
-
-    const session = await auth.api.getSession({
-        headers: request.headers
-    })
-
-    if (!session) return null
-
-    // Better-Auth API filters out accessToken. We'll fetch it directly from the DB.
-    // Since we are in a server function, we can access the same SQLite database.
-    try {
-      const db = new Database('./sqlite.db')
-      const account = db.prepare('SELECT accessToken FROM account WHERE userId = ? AND providerId = ?').get(session.user.id, 'google') as { accessToken: string } | undefined
-      db.close()
-      
-      return account?.accessToken || null
-    } catch (err) {
-      console.error('DEBUG: Direct DB access failed', err)
-      return null
+    if (!response.ok) {
+      if (response.status === 401) {
+        console.log("[Auth] User not authenticated");
+        return null;
+      }
+      console.error("Failed to get drive token:", response.status);
+      return null;
     }
-  })
+
+    const token = await response.text();
+    return token || null;
+  } catch (err) {
+    console.error("Error getting drive token:", err);
+    return null;
+  }
+}
