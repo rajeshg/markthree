@@ -1,0 +1,13 @@
+# Auto-generated files
+src/routeTree.gen.ts
+
+# Build output
+.output/
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Test coverage
+coverage/

@@ -33,9 +33,7 @@ const defaultSettings: Settings = {
   folderPath: [],
 };
 
-const SettingsContext = createContext<SettingsContextType | undefined>(
-  undefined,
-);
+const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings>(() => {
@@ -46,14 +44,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           const parsed = JSON.parse(saved);
           // Merge with defaults to ensure all new properties are present
           const merged = { ...defaultSettings, ...parsed };
-          
+
           // Migration: If currentFolderId is not set but driveFolderId is, initialize it
           if (!merged.currentFolderId && merged.driveFolderId) {
             merged.currentFolderId = merged.driveFolderId;
             merged.currentFolderName = merged.driveFolderName;
             merged.folderPath = [];
           }
-          
+
           return merged;
         } catch (error) {
           console.warn("Failed to parse settings from localStorage:", error);
@@ -77,8 +75,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       // If drive folder is being set and current folder is not set, initialize it
       if (updates.driveFolderId && !prev.currentFolderId) {
         newSettings.currentFolderId = updates.driveFolderId;
-        newSettings.currentFolderName =
-          updates.driveFolderName || prev.driveFolderName;
+        newSettings.currentFolderName = updates.driveFolderName || prev.driveFolderName;
       }
 
       return newSettings;

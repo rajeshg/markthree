@@ -136,9 +136,7 @@ export function BlockEditor({
     if (!block.content.startsWith("/")) return [];
     const query = block.content.slice(1).toLowerCase();
     return slashCommands.filter(
-      (c) =>
-        c.label.toLowerCase().includes(query) ||
-        c.type.toLowerCase().includes(query),
+      (c) => c.label.toLowerCase().includes(query) || c.type.toLowerCase().includes(query),
     );
   }, [block.content, slashCommands]);
 
@@ -157,9 +155,7 @@ export function BlockEditor({
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setSlashMenuIndex(
-          (i) => (i - 1 + filteredCommands.length) % filteredCommands.length,
-        );
+        setSlashMenuIndex((i) => (i - 1 + filteredCommands.length) % filteredCommands.length);
         return true;
       }
       if (e.key === "Enter" || e.key === "Tab") {
@@ -205,26 +201,29 @@ export function BlockEditor({
         .getFileBlob(src)
         .then((blob) => {
           if (cancelled) return;
-          
+
           objectUrl = URL.createObjectURL(blob);
           setImgUrl(objectUrl);
           setImgError(false);
         })
         .catch((err) => {
           if (cancelled) return;
-          
+
           console.error("Failed to load image blob:", err);
           // Fallback to legacy URL
-          driveApi.getImageUrl(src).then((url) => {
-            if (!cancelled && url) {
-              setImgUrl(url);
-              setImgError(false);
-            }
-          }).catch(() => {
-            if (!cancelled) {
-              setImgError(true);
-            }
-          });
+          driveApi
+            .getImageUrl(src)
+            .then((url) => {
+              if (!cancelled && url) {
+                setImgUrl(url);
+                setImgError(false);
+              }
+            })
+            .catch(() => {
+              if (!cancelled) {
+                setImgError(true);
+              }
+            });
         });
     } else {
       setImgUrl(src);
@@ -279,16 +278,14 @@ export function BlockEditor({
         block.type === "checkbox" &&
           block.metadata?.status === "in_progress" &&
           "bg-github-yellow/[0.03]",
-        block.type === "checkbox" &&
-          block.metadata?.status === "done" &&
-          "opacity-50",
+        block.type === "checkbox" && block.metadata?.status === "done" && "opacity-50",
         // Add spacing at the start of special block groups
-        (block.type === "checkbox" || block.type === "code" || block.type === "blockquote") && 
-          isFirstInGroup && 
+        (block.type === "checkbox" || block.type === "code" || block.type === "blockquote") &&
+          isFirstInGroup &&
           "mt-1.5",
         // Add spacing at the end of special block groups
-        (block.type === "checkbox" || block.type === "code" || block.type === "blockquote") && 
-          isLastInGroup && 
+        (block.type === "checkbox" || block.type === "code" || block.type === "blockquote") &&
+          isLastInGroup &&
           "mb-1.5",
         block.type === "image" && "bg-transparent items-start py-1",
         (block.type === "h1" || block.type === "h2" || block.type === "h3") && "items-start",
@@ -384,20 +381,26 @@ export function BlockEditor({
                   onMouseEnter={() => setSlashMenuIndex(index)}
                   className={cn(
                     "w-full flex items-center gap-3 px-2 py-1.5 rounded text-left transition-colors group",
-                    index === slashMenuIndex ? "bg-github-blue/10" : "hover:bg-accent"
+                    index === slashMenuIndex ? "bg-github-blue/10" : "hover:bg-accent",
                   )}
                 >
-                  <span className={cn(
-                    "w-8 h-8 flex items-center justify-center bg-background border border-border rounded text-xs font-bold transition-colors",
-                    index === slashMenuIndex ? "text-github-blue border-github-blue/30 shadow-[0_0_8px_rgba(88,166,255,0.1)]" : "text-muted-foreground group-hover:text-github-blue group-hover:border-github-blue/30"
-                  )}>
+                  <span
+                    className={cn(
+                      "w-8 h-8 flex items-center justify-center bg-background border border-border rounded text-xs font-bold transition-colors",
+                      index === slashMenuIndex
+                        ? "text-github-blue border-github-blue/30 shadow-[0_0_8px_rgba(88,166,255,0.1)]"
+                        : "text-muted-foreground group-hover:text-github-blue group-hover:border-github-blue/30",
+                    )}
+                  >
                     {item.icon}
                   </span>
                   <div className="flex flex-col">
-                    <span className={cn(
-                      "text-xs font-semibold",
-                      index === slashMenuIndex ? "text-github-blue" : "text-foreground"
-                    )}>
+                    <span
+                      className={cn(
+                        "text-xs font-semibold",
+                        index === slashMenuIndex ? "text-github-blue" : "text-foreground",
+                      )}
+                    >
                       {item.label}
                     </span>
                     <span className="text-[10px] text-muted-foreground line-clamp-1">
@@ -473,9 +476,7 @@ export function BlockEditor({
                         d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 2 0 00-2 2v12a2 2 0 002 2z"
                       />
                     </svg>
-                    <span className="text-xs uppercase tracking-widest font-bold">
-                      Loading...
-                    </span>
+                    <span className="text-xs uppercase tracking-widest font-bold">Loading...</span>
                   </div>
                 </div>
               )}
@@ -577,8 +578,7 @@ export function BlockEditor({
                   "font-mono inline-flex items-center transition-all duration-200 shrink-0 hover:bg-accent/50 rounded leading-none -my-0.5 px-0.5",
                   "text-sm sm:text-[15px]",
                   block.metadata?.status === "done" && "text-github-green",
-                  block.metadata?.status === "in_progress" &&
-                    "text-github-yellow",
+                  block.metadata?.status === "in_progress" && "text-github-yellow",
                   block.metadata?.status === "todo" &&
                     "text-muted-foreground/40 hover:text-muted-foreground",
                 )}
@@ -736,8 +736,7 @@ export function BlockEditor({
                     setTimeout(() => {
                       if (textareaRef.current) {
                         textareaRef.current.selectionStart = start + 1;
-                        textareaRef.current.selectionEnd =
-                          start + 1 + selection.length;
+                        textareaRef.current.selectionEnd = start + 1 + selection.length;
                       }
                     }, 0);
                     return;

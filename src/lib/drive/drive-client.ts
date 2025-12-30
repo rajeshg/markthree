@@ -38,12 +38,12 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
     throw new Error("Not authenticated with Google Drive");
   }
 
-  console.log('[fetchWithAuth] Request:', options.method || 'GET', url.substring(0, 100));
+  console.log("[fetchWithAuth] Request:", options.method || "GET", url.substring(0, 100));
 
   // Add timeout to detect hanging requests
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
-    console.error('[fetchWithAuth] Request timeout after 30s');
+    console.error("[fetchWithAuth] Request timeout after 30s");
     controller.abort();
   }, 30000); // 30 second timeout
 
@@ -58,7 +58,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
     });
 
     clearTimeout(timeoutId);
-    console.log('[fetchWithAuth] Response status:', response.status, response.statusText);
+    console.log("[fetchWithAuth] Response status:", response.status, response.statusText);
 
     if (!response.ok) {
       // Handle authentication errors by redirecting to login
@@ -68,24 +68,22 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
       }
 
       const error = await response.json().catch(() => ({}));
-      throw new Error(
-        error.error?.message || `Drive API error: ${response.status}`,
-      );
+      throw new Error(error.error?.message || `Drive API error: ${response.status}`);
     }
 
     if (response.status === 204) {
-      console.log('[fetchWithAuth] 204 No Content - returning null');
+      console.log("[fetchWithAuth] 204 No Content - returning null");
       return null;
     }
-    
+
     const result = await response.json();
-    console.log('[fetchWithAuth] Response body:', result);
+    console.log("[fetchWithAuth] Response body:", result);
     return result;
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('[fetchWithAuth] Request aborted (timeout)');
-      throw new Error('Request timeout - please check your network connection');
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error("[fetchWithAuth] Request aborted (timeout)");
+      throw new Error("Request timeout - please check your network connection");
     }
     throw error;
   }
@@ -137,11 +135,7 @@ export const driveApi = {
     return response.text();
   },
 
-  async createFile(
-    name: string,
-    content: string,
-    folderId: string,
-  ): Promise<DriveFile> {
+  async createFile(name: string, content: string, folderId: string): Promise<DriveFile> {
     const metadata = {
       name,
       mimeType: "text/markdown",
@@ -172,9 +166,9 @@ export const driveApi = {
   },
 
   async updateFile(fileId: string, content: string): Promise<void> {
-    console.log('[DriveAPI] Starting updateFile:', fileId, 'Content length:', content.length);
+    console.log("[DriveAPI] Starting updateFile:", fileId, "Content length:", content.length);
     const url = `${UPLOAD_API_BASE}/${fileId}?uploadType=media`;
-    
+
     try {
       const result = await fetchWithAuth(url, {
         method: "PATCH",
@@ -183,9 +177,9 @@ export const driveApi = {
         },
         body: content,
       });
-      console.log('[DriveAPI] updateFile response:', result);
+      console.log("[DriveAPI] updateFile response:", result);
     } catch (error) {
-      console.error('[DriveAPI] updateFile failed:', error);
+      console.error("[DriveAPI] updateFile failed:", error);
       throw error;
     }
   },
@@ -234,7 +228,7 @@ export const driveApi = {
 
   async getOrCreateAttachmentsFolder(parentFolderId: string): Promise<string> {
     const folderName = "attachments";
-    
+
     // Search for attachments folder inside parent folder
     const query = `name = '${folderName}' and '${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
     const url = `${DRIVE_API_BASE}?q=${encodeURIComponent(query)}&fields=files(id, name)`;
@@ -250,7 +244,7 @@ export const driveApi = {
       mimeType: "application/vnd.google-apps.folder",
       parents: [parentFolderId],
     };
-    
+
     const newFolder = await fetchWithAuth(DRIVE_API_BASE, {
       method: "POST",
       headers: {
@@ -258,14 +252,14 @@ export const driveApi = {
       },
       body: JSON.stringify(metadata),
     });
-    
+
     return newFolder.id;
   },
 
   async uploadImage(file: File, folderId: string): Promise<DriveFile> {
     // Get or create attachments folder
     const attachmentsFolderId = await this.getOrCreateAttachmentsFolder(folderId);
-    
+
     const metadata = {
       name: file.name,
       mimeType: file.type,
@@ -333,9 +327,7 @@ export const driveApi = {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `Failed to fetch image (${response.status}): ${errorText}`,
-      );
+      throw new Error(`Failed to fetch image (${response.status}): ${errorText}`);
     }
 
     const blob = await response.blob();

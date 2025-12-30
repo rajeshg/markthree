@@ -25,19 +25,17 @@ export const Route = createFileRoute("/")({
   validateSearch: searchSchema,
   beforeLoad: async ({ search }) => {
     const { data: session } = await authClient.getSession();
-    
+
     if (session) {
       // If there's a redirect parameter, we'll handle it in the component
       // to avoid SSR/client mismatch issues
       if (search.redirect) {
         return; // Let the component handle the redirect
       }
-      
+
       // Check if user has completed setup
-      const settings = typeof window !== "undefined" 
-        ? localStorage.getItem("app-settings") 
-        : null;
-      
+      const settings = typeof window !== "undefined" ? localStorage.getItem("app-settings") : null;
+
       if (settings) {
         try {
           const parsed = JSON.parse(settings);
@@ -49,7 +47,7 @@ export const Route = createFileRoute("/")({
           // If parsing failed, continue to setup
         }
       }
-      
+
       // User is authenticated but hasn't set up Drive folder
       throw redirect({ to: "/setup" });
     }
@@ -67,8 +65,8 @@ function HomeComponent() {
     if (search.redirect) {
       // Parse the redirect URL
       const redirectUrl = search.redirect;
-      const [path, searchString] = redirectUrl.split('?');
-      
+      const [path, searchString] = redirectUrl.split("?");
+
       if (searchString) {
         // Parse search params
         const params = new URLSearchParams(searchString);
@@ -76,14 +74,14 @@ function HomeComponent() {
         params.forEach((value, key) => {
           searchObj[key] = value;
         });
-        
-        navigate({ 
+
+        navigate({
           to: path as any,
           search: searchObj,
           replace: true,
         });
       } else {
-        navigate({ 
+        navigate({
           to: path as any,
           replace: true,
         });
@@ -97,14 +95,12 @@ function HomeComponent() {
         MarkThree <span className="text-github-fg/50">v2</span>
       </h1>
       <p className="max-w-[600px] text-muted-foreground text-lg">
-        A minimalist markdown editor that syncs directly to your Google Drive.
-        GitHub aesthetic, terminal speed, your data.
+        A minimalist markdown editor that syncs directly to your Google Drive. GitHub aesthetic,
+        terminal speed, your data.
       </p>
 
       <div className="pt-8">
-        <p className="text-sm text-muted-foreground mb-4">
-          Sign in to get started
-        </p>
+        <p className="text-sm text-muted-foreground mb-4">Sign in to get started</p>
         <button
           onClick={() => authClient.signIn.social({ provider: "google" })}
           className="px-8 py-3 bg-github-blue hover:bg-github-blue/90 text-white rounded-lg font-bold text-lg transition-all transform hover:scale-105 shadow-lg"

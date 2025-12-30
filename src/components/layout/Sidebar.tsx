@@ -21,21 +21,8 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  FileText,
-  Plus,
-  RefreshCw,
-  Folder,
-  Trash2,
-  Image,
-  File,
-  ChevronRight,
-} from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { FileText, Plus, RefreshCw, Folder, Trash2, Image, File, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 // Helper function to get the appropriate icon for file types
@@ -59,14 +46,11 @@ export function Sidebar() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creatingNew, setCreatingNew] = useState(false);
   const { setOpenMobile } = useSidebar();
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
-    new Set()
-  );
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
   // Use current folder or root drive folder
   const currentFolderId = settings.currentFolderId || settings.driveFolderId;
-  const currentFolderName =
-    settings.currentFolderName || settings.driveFolderName;
+  const currentFolderName = settings.currentFolderName || settings.driveFolderName;
 
   const {
     data: files,
@@ -75,18 +59,11 @@ export function Sidebar() {
     isFetching,
   } = useQuery({
     queryKey: ["drive-files", currentFolderId],
-    queryFn: () =>
-      currentFolderId
-        ? driveApi.listFiles(currentFolderId)
-        : Promise.resolve([]),
+    queryFn: () => (currentFolderId ? driveApi.listFiles(currentFolderId) : Promise.resolve([])),
     enabled: !!currentFolderId,
   });
 
-  const handleDelete = async (
-    e: React.MouseEvent,
-    id: string,
-    name: string
-  ) => {
+  const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -123,11 +100,7 @@ export function Sidebar() {
       const fileName = `Untitled ${timestamp}.md`;
       const initialContent = "# Untitled\n\n";
 
-      const newFile = await driveApi.createFile(
-        fileName,
-        initialContent,
-        settings.driveFolderId
-      );
+      const newFile = await driveApi.createFile(fileName, initialContent, settings.driveFolderId);
 
       // Invalidate the file list cache
       queryClient.invalidateQueries({ queryKey: ["drive-files"] });
@@ -156,13 +129,7 @@ export function Sidebar() {
   };
 
   // Component to render folder with its contents (recursive)
-  const FolderItem = ({
-    folder,
-    level = 0,
-  }: {
-    folder: any;
-    level?: number;
-  }) => {
+  const FolderItem = ({ folder, level = 0 }: { folder: any; level?: number }) => {
     const isExpanded = expandedFolders.has(folder.id);
 
     // Query for folder contents
@@ -177,18 +144,12 @@ export function Sidebar() {
     // For nested folders (level > 0), render as sub-item to maintain indentation
     if (level > 0) {
       return (
-        <Collapsible
-          open={isExpanded}
-          onOpenChange={() => toggleFolder(folder.id)}
-        >
+        <Collapsible open={isExpanded} onOpenChange={() => toggleFolder(folder.id)}>
           <SidebarMenuSubItem>
             <CollapsibleTrigger asChild>
               <SidebarMenuSubButton>
                 <ChevronRight
-                  className={cn(
-                    "size-4 transition-transform",
-                    isExpanded && "rotate-90"
-                  )}
+                  className={cn("size-4 transition-transform", isExpanded && "rotate-90")}
                 />
                 <Folder className="size-4" />
                 <span className="truncate">{folderDisplayName}</span>
@@ -197,26 +158,19 @@ export function Sidebar() {
             <CollapsibleContent>
               <div className="ml-4 flex flex-col gap-1">
                 {isFolderLoading ? (
-                  <div className="px-2 py-1 text-xs text-muted-foreground">
-                    Loading...
-                  </div>
+                  <div className="px-2 py-1 text-xs text-muted-foreground">Loading...</div>
                 ) : folderContents?.length === 0 ? (
-                  <div className="px-2 py-1 text-xs text-muted-foreground italic">
-                    Empty folder
-                  </div>
+                  <div className="px-2 py-1 text-xs text-muted-foreground italic">Empty folder</div>
                 ) : (
                   folderContents?.map((item) => {
                     const IconComponent = getFileIcon(item.mimeType, item.name);
                     const displayName = item.name.toLowerCase().endsWith(".md")
                       ? item.name.replace(".md", "")
                       : item.name;
-                    const isFolder =
-                      item.mimeType === "application/vnd.google-apps.folder";
+                    const isFolder = item.mimeType === "application/vnd.google-apps.folder";
 
                     if (isFolder) {
-                      return (
-                        <FolderItem key={item.id} folder={item} level={level + 1} />
-                      );
+                      return <FolderItem key={item.id} folder={item} level={level + 1} />;
                     }
 
                     return (
@@ -246,18 +200,12 @@ export function Sidebar() {
 
     // For top-level folders (level 0), render as menu item
     return (
-      <Collapsible
-        open={isExpanded}
-        onOpenChange={() => toggleFolder(folder.id)}
-      >
+      <Collapsible open={isExpanded} onOpenChange={() => toggleFolder(folder.id)}>
         <SidebarMenuItem>
           <CollapsibleTrigger asChild>
             <SidebarMenuButton tooltip={folderDisplayName}>
               <ChevronRight
-                className={cn(
-                  "size-4 transition-transform",
-                  isExpanded && "rotate-90"
-                )}
+                className={cn("size-4 transition-transform", isExpanded && "rotate-90")}
               />
               <Folder className="size-4" />
               <span className="truncate">{folderDisplayName}</span>
@@ -267,15 +215,11 @@ export function Sidebar() {
             <SidebarMenuSub>
               {isFolderLoading ? (
                 <SidebarMenuSubItem>
-                  <div className="px-2 py-1 text-xs text-muted-foreground">
-                    Loading...
-                  </div>
+                  <div className="px-2 py-1 text-xs text-muted-foreground">Loading...</div>
                 </SidebarMenuSubItem>
               ) : folderContents?.length === 0 ? (
                 <SidebarMenuSubItem>
-                  <div className="px-2 py-1 text-xs text-muted-foreground italic">
-                    Empty folder
-                  </div>
+                  <div className="px-2 py-1 text-xs text-muted-foreground italic">Empty folder</div>
                 </SidebarMenuSubItem>
               ) : (
                 folderContents?.map((item) => {
@@ -283,8 +227,7 @@ export function Sidebar() {
                   const displayName = item.name.toLowerCase().endsWith(".md")
                     ? item.name.replace(".md", "")
                     : item.name;
-                  const isFolder =
-                    item.mimeType === "application/vnd.google-apps.folder";
+                  const isFolder = item.mimeType === "application/vnd.google-apps.folder";
 
                   if (isFolder) {
                     // Recursive folder rendering with increased level
@@ -332,12 +275,8 @@ export function Sidebar() {
                 <Folder className="size-4" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">
-                  {currentFolderName || "No Folder"}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  Drive Folder
-                </span>
+                <span className="truncate font-semibold">{currentFolderName || "No Folder"}</span>
+                <span className="truncate text-xs text-muted-foreground">Drive Folder</span>
               </div>
             </SidebarMenuButton>
             {/* Action buttons wrapper */}
@@ -347,7 +286,7 @@ export function Sidebar() {
                 title="Refresh files"
                 className={cn(
                   "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex aspect-square w-5 items-center justify-center rounded-md p-0 transition-colors",
-                  isFetching && "animate-spin"
+                  isFetching && "animate-spin",
                 )}
               >
                 <RefreshCw className="size-4" />
@@ -403,8 +342,7 @@ export function Sidebar() {
                   const displayName = item.name.toLowerCase().endsWith(".md")
                     ? item.name.replace(".md", "")
                     : item.name;
-                  const isFolder =
-                    item.mimeType === "application/vnd.google-apps.folder";
+                  const isFolder = item.mimeType === "application/vnd.google-apps.folder";
 
                   if (isFolder) {
                     return <FolderItem key={item.id} folder={item} />;
@@ -430,9 +368,7 @@ export function Sidebar() {
                         showOnHover
                         disabled={deletingId === item.id}
                         onClick={(e) => handleDelete(e, item.id, item.name)}
-                        className={
-                          deletingId === item.id ? "animate-pulse" : ""
-                        }
+                        className={deletingId === item.id ? "animate-pulse" : ""}
                       >
                         <Trash2 className="size-4" />
                         <span className="sr-only">Delete</span>

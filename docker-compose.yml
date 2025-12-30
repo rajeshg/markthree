@@ -1,0 +1,35 @@
+services:
+  markthree:
+    build: .
+    image: markthree:latest
+    container_name: markthree-app
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DB_PATH=/app/db/sqlite.db
+    volumes:
+      # Persist SQLite database file in a dedicated volume
+      - markthree_db:/app/db
+    ports:
+      # External port 4141 maps to internal container port 3000
+      - "4141:3000"
+    restart: unless-stopped
+    networks:
+      - markthree_network
+    healthcheck:
+      test: ["CMD", "node", "-e", "const http=require('http');http.get('http://localhost:3000',(r)=>{if(r.statusCode!==200)throw new Error(r.statusCode)}).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  markthree_db:
+    driver: local
+
+networks:
+  markthree_network:
+    driver: bridge

@@ -163,10 +163,7 @@ function RootDocument() {
                   <Outlet />
                 </div>
               </main>
-              <SearchModal 
-                isOpen={isSearchOpen} 
-                onClose={() => setIsSearchOpen(false)} 
-              />
+              <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
             </SidebarProvider>
             <TanStackDevtools
               config={{

@@ -10,5 +10,6 @@ count.txt
 .wrangler
 .output
 .vinxi
+.vite
 todos.json
 *.db

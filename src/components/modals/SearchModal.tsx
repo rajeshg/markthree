@@ -33,7 +33,7 @@ export function SearchModal({ isOpen, onClose, folderId = "root" }: SearchModalP
         e.preventDefault();
         if (isOpen) onClose();
       }
-      
+
       if (!isOpen) return;
 
       if (e.key === "Escape") {
@@ -86,7 +86,7 @@ export function SearchModal({ isOpen, onClose, folderId = "root" }: SearchModalP
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 sm:px-0 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div 
+      <div
         className="w-full max-w-2xl bg-card border border-border rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
@@ -104,7 +104,7 @@ export function SearchModal({ isOpen, onClose, folderId = "root" }: SearchModalP
             <kbd className="hidden sm:flex items-center gap-1 px-2 py-1 bg-muted border border-border rounded text-[10px] font-mono text-muted-foreground">
               <Command size={10} /> ESC
             </kbd>
-            <button 
+            <button
               onClick={onClose}
               className="p-1 hover:bg-accent rounded-md text-muted-foreground transition-colors"
             >
@@ -117,7 +117,9 @@ export function SearchModal({ isOpen, onClose, folderId = "root" }: SearchModalP
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground animate-pulse flex flex-col items-center gap-3">
               <div className="w-6 h-6 border-2 border-github-blue border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs font-bold uppercase tracking-widest">Searching Drive...</span>
+              <span className="text-xs font-bold uppercase tracking-widest">
+                Searching Drive...
+              </span>
             </div>
           ) : results.length > 0 ? (
             <div className="flex flex-col gap-1">
@@ -128,21 +130,29 @@ export function SearchModal({ isOpen, onClose, folderId = "root" }: SearchModalP
                   onMouseEnter={() => setSelectedIndex(index)}
                   className={cn(
                     "w-full flex items-center justify-between px-3 py-3 rounded-lg text-left transition-all group",
-                    index === selectedIndex ? "bg-github-blue/10 translate-x-1" : "hover:bg-accent/50"
+                    index === selectedIndex
+                      ? "bg-github-blue/10 translate-x-1"
+                      : "hover:bg-accent/50",
                   )}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-10 h-10 flex items-center justify-center rounded-md border border-border bg-background transition-colors",
-                      index === selectedIndex ? "text-github-blue border-github-blue/30 shadow-[0_0_12px_rgba(88,166,255,0.1)]" : "text-muted-foreground"
-                    )}>
+                    <div
+                      className={cn(
+                        "w-10 h-10 flex items-center justify-center rounded-md border border-border bg-background transition-colors",
+                        index === selectedIndex
+                          ? "text-github-blue border-github-blue/30 shadow-[0_0_12px_rgba(88,166,255,0.1)]"
+                          : "text-muted-foreground",
+                      )}
+                    >
                       <FileText size={20} />
                     </div>
                     <div className="flex flex-col">
-                      <span className={cn(
-                        "text-sm font-semibold",
-                        index === selectedIndex ? "text-github-blue" : "text-foreground"
-                      )}>
+                      <span
+                        className={cn(
+                          "text-sm font-semibold",
+                          index === selectedIndex ? "text-github-blue" : "text-foreground",
+                        )}
+                      >
                         {file.name}
                       </span>
                       <span className="text-[10px] text-muted-foreground uppercase tracking-tighter">
@@ -150,12 +160,14 @@ export function SearchModal({ isOpen, onClose, folderId = "root" }: SearchModalP
                       </span>
                     </div>
                   </div>
-                  <ArrowRight 
-                    size={16} 
+                  <ArrowRight
+                    size={16}
                     className={cn(
                       "text-github-blue transition-all",
-                      index === selectedIndex ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2"
-                    )} 
+                      index === selectedIndex
+                        ? "opacity-100 translate-x-0"
+                        : "opacity-0 -translate-x-2",
+                    )}
                   />
                 </button>
               ))}
@@ -182,12 +194,20 @@ export function SearchModal({ isOpen, onClose, folderId = "root" }: SearchModalP
         <div className="px-4 py-3 bg-muted/30 border-t border-border flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded text-[9px] font-mono text-muted-foreground">ENTER</kbd>
-              <span className="text-[10px] text-muted-foreground font-medium uppercase">Select</span>
+              <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded text-[9px] font-mono text-muted-foreground">
+                ENTER
+              </kbd>
+              <span className="text-[10px] text-muted-foreground font-medium uppercase">
+                Select
+              </span>
             </div>
             <div className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded text-[9px] font-mono text-muted-foreground">↑↓</kbd>
-              <span className="text-[10px] text-muted-foreground font-medium uppercase">Navigate</span>
+              <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded text-[9px] font-mono text-muted-foreground">
+                ↑↓
+              </kbd>
+              <span className="text-[10px] text-muted-foreground font-medium uppercase">
+                Navigate
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-bold uppercase">

@@ -13,18 +13,13 @@ export function useEditor(initialMarkdown: string = "") {
     };
   });
 
-  const updateBlock = useCallback(
-    (id: string, updates: Partial<EditorBlock>) => {
-      setState((prev) => ({
-        ...prev,
-        blocks: prev.blocks.map((b) =>
-          b.id === id ? { ...b, ...updates } : b,
-        ),
-        isDirty: true,
-      }));
-    },
-    [],
-  );
+  const updateBlock = useCallback((id: string, updates: Partial<EditorBlock>) => {
+    setState((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((b) => (b.id === id ? { ...b, ...updates } : b)),
+      isDirty: true,
+    }));
+  }, []);
 
   const addBlock = useCallback(
     (
@@ -36,9 +31,7 @@ export function useEditor(initialMarkdown: string = "") {
         id: nanoid(),
         type,
         content: initialData?.content || "",
-        metadata:
-          initialData?.metadata ||
-          (type === "checkbox" ? { status: "todo" } : undefined),
+        metadata: initialData?.metadata || (type === "checkbox" ? { status: "todo" } : undefined),
       };
 
       setState((prev) => {
@@ -77,16 +70,16 @@ export function useEditor(initialMarkdown: string = "") {
     setState((prev) => {
       const index = prev.blocks.findIndex((b) => b.id === id);
       if (index <= 0) return prev; // Can't merge if first block
-      
+
       const currentBlock = prev.blocks[index];
       const previousBlock = prev.blocks[index - 1];
-      
+
       // Merge content into previous block
       const mergedContent = previousBlock.content + currentBlock.content;
       const newBlocks = [...prev.blocks];
       newBlocks[index - 1] = { ...previousBlock, content: mergedContent };
       newBlocks.splice(index, 1);
-      
+
       return {
         ...prev,
         blocks: newBlocks,
@@ -103,7 +96,7 @@ export function useEditor(initialMarkdown: string = "") {
   const resetEditor = useCallback((markdown: string, options?: { focusLast?: boolean }) => {
     const parsedBlocks = parseMarkdownToBlocks(markdown);
     const lastBlockId = parsedBlocks.length > 0 ? parsedBlocks[parsedBlocks.length - 1].id : null;
-    
+
     setState({
       blocks: parsedBlocks,
       activeBlockId: options?.focusLast ? lastBlockId : null,
@@ -129,10 +122,7 @@ export function useEditor(initialMarkdown: string = "") {
 
       const newBlocks = [...prev.blocks];
       const targetIndex = direction === "up" ? index - 1 : index + 1;
-      [newBlocks[index], newBlocks[targetIndex]] = [
-        newBlocks[targetIndex],
-        newBlocks[index],
-      ];
+      [newBlocks[index], newBlocks[targetIndex]] = [newBlocks[targetIndex], newBlocks[index]];
 
       return {
         ...prev,
@@ -152,7 +142,6 @@ export function useEditor(initialMarkdown: string = "") {
     getMarkdown,
     resetEditor,
     markAsSaved,
-    setActiveBlock: (id: string | null) =>
-      setState((p) => ({ ...p, activeBlockId: id })),
+    setActiveBlock: (id: string | null) => setState((p) => ({ ...p, activeBlockId: id })),
   };
 }

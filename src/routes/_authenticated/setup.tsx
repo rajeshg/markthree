@@ -37,9 +37,7 @@ function SetupComponent() {
   const handlePickFolder = async () => {
     // This will eventually use the Google Drive Picker API
     // For now, we'll just show the error that it's not implemented
-    setError(
-      'Drive Picker integration coming soon. Please use "Create Default Folder" for now.',
-    );
+    setError('Drive Picker integration coming soon. Please use "Create Default Folder" for now.');
   };
 
   return (

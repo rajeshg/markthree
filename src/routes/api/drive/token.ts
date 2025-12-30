@@ -2,6 +2,9 @@ import { auth } from "@/lib/auth/auth";
 import { createFileRoute } from "@tanstack/react-router";
 import Database from "better-sqlite3";
 
+// Use DB_PATH from environment or default to ./sqlite.db for development
+const dbPath = process.env.DB_PATH || "./sqlite.db";
+
 export const Route = createFileRoute("/api/drive/token")({
   server: {
     handlers: {
@@ -19,24 +22,17 @@ export const Route = createFileRoute("/api/drive/token")({
           }
 
           // Better-Auth API filters out accessToken. We'll fetch it directly from the DB.
-          const db = new Database("./sqlite.db");
+          const db = new Database(dbPath);
           const account = db
-            .prepare(
-              "SELECT accessToken FROM account WHERE userId = ? AND providerId = ?",
-            )
-            .get(session.user.id, "google") as
-            | { accessToken: string }
-            | undefined;
+            .prepare("SELECT accessToken FROM account WHERE userId = ? AND providerId = ?")
+            .get(session.user.id, "google") as { accessToken: string } | undefined;
           db.close();
 
           if (!account?.accessToken) {
-            return new Response(
-              JSON.stringify({ error: "No access token found" }),
-              {
-                status: 401,
-                headers: { "Content-Type": "application/json" },
-              },
-            );
+            return new Response(JSON.stringify({ error: "No access token found" }), {
+              status: 401,
+              headers: { "Content-Type": "application/json" },
+            });
           }
 
           return new Response(account.accessToken, {
@@ -44,13 +40,10 @@ export const Route = createFileRoute("/api/drive/token")({
           });
         } catch (err) {
           console.error("Token retrieval error:", err);
-          return new Response(
-            JSON.stringify({ error: "Internal server error" }),
-            {
-              status: 500,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
+          return new Response(JSON.stringify({ error: "Internal server error" }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
         }
       },
     },

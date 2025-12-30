@@ -27,17 +27,8 @@ export function parseMarkdownToBlocks(markdown: string): EditorBlock[] {
         break;
       case "paragraph":
         // Check for images inside paragraphs (common for single-line images)
-        if (
-          token.tokens &&
-          token.tokens.length === 1 &&
-          token.tokens[0].type === "image"
-        ) {
+        if (token.tokens && token.tokens.length === 1 && token.tokens[0].type === "image") {
           const img = token.tokens[0];
-          console.log(
-            "[Parser] ✅ FOUND IMAGE in paragraph:",
-            img.href,
-            img.text,
-          );
           blocks.push({
             id: nanoid(),
             type: "image",
@@ -54,9 +45,7 @@ export function parseMarkdownToBlocks(markdown: string): EditorBlock[] {
           const text = item.text;
           // Check for custom in-progress state [.] or [/] or [-]
           const isInProgress =
-            text.startsWith("[.] ") ||
-            text.startsWith("[/] ") ||
-            text.startsWith("[-] ");
+            text.startsWith("[.] ") || text.startsWith("[/] ") || text.startsWith("[-] ");
           const isTask = item.task === true || isInProgress;
 
           let status = "todo";
@@ -93,15 +82,6 @@ export function parseMarkdownToBlocks(markdown: string): EditorBlock[] {
         content = "";
         break;
       case "blockquote":
-        console.log("[Parser] Blockquote token:", {
-          text: token.text?.substring(0, 100),
-          hasTokens: !!token.tokens,
-          tokenCount: token.tokens?.length,
-          tokens: token.tokens?.map((t: any) => ({
-            type: t.type,
-            text: t.text?.substring(0, 50),
-          })),
-        });
         type = "blockquote";
         content = token.text;
         break;
@@ -146,8 +126,7 @@ export function blocksToMarkdown(blocks: EditorBlock[]): string {
     const nextBlock = index < blocks.length - 1 ? blocks[index + 1] : null;
 
     // Helper to check if a block type is a list item
-    const isListType = (type: BlockType) =>
-      ["ul", "ol", "checkbox"].includes(type);
+    const isListType = (type: BlockType) => ["ul", "ol", "checkbox"].includes(type);
 
     switch (block.type) {
       case "h1":
@@ -167,8 +146,7 @@ export function blocksToMarkdown(blocks: EditorBlock[]): string {
         break;
       case "checkbox": {
         const status = block.metadata?.status || "todo";
-        const marker =
-          status === "done" ? "[x]" : status === "in_progress" ? "[/]" : "[ ]";
+        const marker = status === "done" ? "[x]" : status === "in_progress" ? "[/]" : "[ ]";
         markdown += `- ${marker} ${block.content}\n`;
         break;
       }
