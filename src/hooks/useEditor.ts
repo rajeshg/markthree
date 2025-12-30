@@ -73,13 +73,38 @@ export function useEditor(initialMarkdown: string = "") {
     });
   }, []);
 
+  const mergeWithPrevious = useCallback((id: string) => {
+    setState((prev) => {
+      const index = prev.blocks.findIndex((b) => b.id === id);
+      if (index <= 0) return prev; // Can't merge if first block
+      
+      const currentBlock = prev.blocks[index];
+      const previousBlock = prev.blocks[index - 1];
+      
+      // Merge content into previous block
+      const mergedContent = previousBlock.content + currentBlock.content;
+      const newBlocks = [...prev.blocks];
+      newBlocks[index - 1] = { ...previousBlock, content: mergedContent };
+      newBlocks.splice(index, 1);
+      
+      return {
+        ...prev,
+        blocks: newBlocks,
+        activeBlockId: previousBlock.id,
+        isDirty: true,
+      };
+    });
+  }, []);
+
   const getMarkdown = useCallback(() => {
     return blocksToMarkdown(state.blocks);
   }, [state.blocks]);
 
   const resetEditor = useCallback((markdown: string) => {
+    const parsedBlocks = parseMarkdownToBlocks(markdown);
+    
     setState({
-      blocks: parseMarkdownToBlocks(markdown),
+      blocks: parsedBlocks,
       activeBlockId: null,
       isDirty: false,
       lastSaved: new Date(),
@@ -113,6 +138,7 @@ export function useEditor(initialMarkdown: string = "") {
     updateBlock,
     addBlock,
     removeBlock,
+    mergeWithPrevious,
     moveBlock,
     getMarkdown,
     resetEditor,

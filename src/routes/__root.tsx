@@ -5,6 +5,7 @@ import {
   Scripts,
   createRootRouteWithContext,
 } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import { FileQuestion, Home } from "lucide-react";
@@ -14,6 +15,7 @@ import { Sidebar } from "../components/layout/Sidebar";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { SettingsProvider } from "../contexts/SettingsContext";
 import { SidebarProvider } from "../components/ui/sidebar";
+import { SearchModal } from "../components/modals/SearchModal";
 
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 
@@ -36,6 +38,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         content: "width=device-width, initial-scale=1",
       },
       {
+        name: "color-scheme",
+        content: "dark light",
+      },
+      {
         title: "MarkThree v2",
       },
     ],
@@ -48,18 +54,6 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         rel: "icon",
         type: "image/svg+xml",
         href: "/logo.svg",
-      },
-    ],
-    scripts: [
-      {
-        src: "https://accounts.google.com/gsi/client",
-        async: true,
-        defer: true,
-      },
-      {
-        src: "https://apis.google.com/js/api.js",
-        async: true,
-        defer: true,
       },
     ],
   }),
@@ -94,10 +88,69 @@ function NotFound() {
 }
 
 function RootDocument() {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Load Google scripts client-side only to avoid hydration mismatch
+  useEffect(() => {
+    const loadGoogleScripts = () => {
+      // Load Google Sign-In
+      if (!document.querySelector('script[src="https://accounts.google.com/gsi/client"]')) {
+        const gsiScript = document.createElement("script");
+        gsiScript.src = "https://accounts.google.com/gsi/client";
+        gsiScript.async = true;
+        gsiScript.defer = true;
+        document.head.appendChild(gsiScript);
+      }
+
+      // Load Google API
+      if (!document.querySelector('script[src="https://apis.google.com/js/api.js"]')) {
+        const gapiScript = document.createElement("script");
+        gapiScript.src = "https://apis.google.com/js/api.js";
+        gapiScript.async = true;
+        gapiScript.defer = true;
+        document.head.appendChild(gapiScript);
+      }
+    };
+
+    loadGoogleScripts();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setIsSearchOpen((prev: boolean) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <html lang="en">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  const theme = localStorage.getItem('theme') || 'dark';
+                  const root = document.documentElement;
+                  
+                  if (theme === 'system') {
+                    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                    root.classList.add(systemTheme);
+                  } else {
+                    root.classList.add(theme);
+                  }
+                } catch (e) {
+                  document.documentElement.classList.add('dark');
+                }
+              })();
+            `,
+          }}
+        />
       </head>
       <body>
         <ThemeProvider>
@@ -110,6 +163,10 @@ function RootDocument() {
                   <Outlet />
                 </div>
               </main>
+              <SearchModal 
+                isOpen={isSearchOpen} 
+                onClose={() => setIsSearchOpen(false)} 
+              />
             </SidebarProvider>
             <TanStackDevtools
               config={{

@@ -18,7 +18,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return "dark";
   });
 
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      const savedTheme = (localStorage.getItem("theme") as Theme) || "dark";
+      if (savedTheme === "system") {
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      return savedTheme;
+    }
+    return "dark";
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;

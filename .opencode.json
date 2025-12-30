@@ -1,0 +1,26 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "AGENTS.md"
+  ],
+  "permission": {
+    "bash": "ask",
+    "write": "ask",
+    "edit": "ask"
+  },
+  "autoupdate": "notify",
+  "compaction": {
+    "auto": true,
+    "prune": true
+  },
+  "watcher": {
+    "ignore": [
+      "node_modules/**",
+      "dist/**",
+      ".git/**",
+      ".vite/**",
+      "build/**",
+      "coverage/**"
+    ]
+  }
+}

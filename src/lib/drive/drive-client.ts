@@ -17,10 +17,12 @@ export interface DriveFolder {
 function handleAuthFailure() {
   // Clear any cached data
   if (typeof window !== "undefined") {
-    // Small delay to show the message in console
-    setTimeout(() => {
-      window.location.href = "/";
-    }, 100);
+    // Only redirect if we're not already on the home page
+    if (window.location.pathname !== "/") {
+      console.warn("[Drive] Authentication failed, redirecting to login");
+      // Use replace to avoid back-button loops
+      window.location.replace("/");
+    }
   }
 }
 
@@ -238,6 +240,13 @@ export const driveApi = {
       },
       body,
     });
+  },
+
+  async searchFiles(query: string): Promise<DriveFile[]> {
+    const q = `name contains '${query}' and mimeType = 'text/markdown' and trashed = false`;
+    const url = `${DRIVE_API_BASE}?q=${encodeURIComponent(q)}&fields=files(id, name, mimeType, modifiedTime)&pageSize=10`;
+    const data = await fetchWithAuth(url);
+    return data.files || [];
   },
 
   async getFileBlob(fileId: string): Promise<Blob> {

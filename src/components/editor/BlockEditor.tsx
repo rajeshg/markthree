@@ -86,7 +86,7 @@ export function BlockEditor({
       },
       {
         label: "Quote",
-        icon: "“",
+        icon: '"',
         type: "blockquote",
         description: "Capture a quotation",
         action: () => onUpdate({ type: "blockquote", content: "" }),
@@ -171,39 +171,47 @@ export function BlockEditor({
 
   // Fetch image URL if it's an image block
   useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
     if (block.type !== "image" || !block.metadata?.src) {
+      setImgUrl(null);
       return;
     }
 
     const src = block.metadata.src;
-    console.log("[BlockEditor] Processing image block:", src);
 
     // If src is a drive ID, fetch as blob and create object URL
     if (!src.startsWith("http")) {
       driveApi
         .getFileBlob(src)
         .then((blob) => {
-          const objectUrl = URL.createObjectURL(blob);
-          console.log("[BlockEditor] Object URL created:", objectUrl);
+          if (cancelled) return;
+          
+          objectUrl = URL.createObjectURL(blob);
           setImgUrl(objectUrl);
         })
         .catch((err) => {
-          console.error("[BlockEditor] Failed to load image blob:", err);
+          if (cancelled) return;
+          
+          console.error("Failed to load image blob:", err);
           // Fallback to legacy URL
-          console.log("[BlockEditor] Attempting fallback with token-based URL");
           driveApi.getImageUrl(src).then((url) => {
-            if (url) {
-              console.log("[BlockEditor] Fallback URL set:", url);
+            if (!cancelled && url) {
               setImgUrl(url);
-            } else {
-              console.error("[BlockEditor] Fallback URL was empty");
             }
           });
         });
     } else {
-      console.log("[BlockEditor] Using direct URL:", src);
       setImgUrl(src);
     }
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
   }, [block.type, block.metadata?.src]);
 
   useEffect(() => {
@@ -265,25 +273,7 @@ export function BlockEditor({
       >
         {/* Formatting Toolbar / Slash Menu */}
         {isActive && block.content === "" && (
-          <div className="absolute -top-10 sm:-top-8 left-0 flex items-center gap-1 bg-card border border-border px-2 py-1.5 sm:py-1 rounded shadow-xl z-50 animate-in fade-in slide-in-from-bottom-2">
-            <button
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onUpdate({ type: "h1" });
-              }}
-              className="p-2 sm:p-1 hover:bg-accent rounded text-[10px] font-bold min-w-[28px] min-h-[28px] flex items-center justify-center"
-            >
-              H1
-            </button>
-            <button
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onUpdate({ type: "h2" });
-              }}
-              className="p-2 sm:p-1 hover:bg-accent rounded text-[10px] font-bold min-w-[28px] min-h-[28px] flex items-center justify-center"
-            >
-              H2
-            </button>
+          <div className="absolute -top-12 sm:-top-10 left-0 flex items-center gap-1 bg-card border border-border px-2 py-1.5 sm:py-1 rounded shadow-xl z-50 animate-in fade-in slide-in-from-bottom-2">
             <button
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -337,36 +327,48 @@ export function BlockEditor({
           </div>
         )}
 
-        {/* Slash Menu (Experimental) */}
-        {isActive && block.content === "/" && (
-          <div className="absolute top-8 left-0 w-48 bg-card border border-border rounded-md shadow-2xl z-50 overflow-hidden animate-in zoom-in-95 duration-75">
-            <div className="px-2 py-1.5 border-b border-border bg-accent/50">
+        {/* Slash Menu */}
+        {isActive && filteredCommands.length > 0 && (
+          <div className="absolute top-8 left-0 w-64 bg-card border border-border rounded-md shadow-2xl z-50 overflow-hidden animate-in zoom-in-95 duration-75">
+            <div className="px-3 py-2 border-b border-border bg-accent/50 flex justify-between items-center">
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                 Commands
               </span>
+              <span className="text-[10px] text-muted-foreground/50 font-mono">
+                {slashMenuIndex + 1} / {filteredCommands.length}
+              </span>
             </div>
-            <div className="p-1 flex flex-col gap-0.5">
-              {[
-                { label: "H1 Header", icon: "H1", type: "h1" },
-                { label: "H2 Header", icon: "H2", type: "h2" },
-                { label: "H3 Header", icon: "H3", type: "h3" },
-                { label: "Task List", icon: "[ ]", type: "checkbox" },
-                { label: "Code Block", icon: "</>", type: "code" },
-                { label: "Quote", icon: "“", type: "blockquote" },
-                { label: "Divider", icon: "—", type: "hr" },
-              ].map((item) => (
+            <div className="p-1 flex flex-col gap-0.5 max-h-[280px] overflow-y-auto">
+              {filteredCommands.map((item, index) => (
                 <button
-                  key={item.type}
+                  key={item.label + item.type}
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    onUpdate({ type: item.type as any, content: "" });
+                    item.action();
                   }}
-                  className="w-full flex items-center gap-3 px-2 py-1.5 hover:bg-accent rounded text-left transition-colors group"
+                  onMouseEnter={() => setSlashMenuIndex(index)}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-2 py-1.5 rounded text-left transition-colors group",
+                    index === slashMenuIndex ? "bg-github-blue/10" : "hover:bg-accent"
+                  )}
                 >
-                  <span className="w-6 h-6 flex items-center justify-center bg-background border border-border rounded text-[10px] font-bold group-hover:text-github-blue group-hover:border-github-blue/30">
+                  <span className={cn(
+                    "w-8 h-8 flex items-center justify-center bg-background border border-border rounded text-xs font-bold transition-colors",
+                    index === slashMenuIndex ? "text-github-blue border-github-blue/30 shadow-[0_0_8px_rgba(88,166,255,0.1)]" : "text-muted-foreground group-hover:text-github-blue group-hover:border-github-blue/30"
+                  )}>
                     {item.icon}
                   </span>
-                  <span className="text-xs font-medium">{item.label}</span>
+                  <div className="flex flex-col">
+                    <span className={cn(
+                      "text-xs font-semibold",
+                      index === slashMenuIndex ? "text-github-blue" : "text-foreground"
+                    )}>
+                      {item.label}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground line-clamp-1">
+                      {item.description}
+                    </span>
+                  </div>
                 </button>
               ))}
             </div>
@@ -379,24 +381,11 @@ export function BlockEditor({
             <div className="relative rounded-md border border-border bg-card overflow-hidden w-full sm:max-w-md group/preview">
               {imgUrl ? (
                 <img
+                  key={imgUrl}
                   src={imgUrl}
                   alt={block.content || "Image"}
-                  className="w-full h-auto max-h-64 sm:max-h-56 object-contain"
-                  onLoad={() =>
-                    console.log(
-                      "[IMG] Image loaded successfully from:",
-                      imgUrl.substring(0, 50),
-                    )
-                  }
-                  onError={(e) => {
-                    console.error(
-                      "[IMG] Image failed to load from:",
-                      imgUrl.substring(0, 100),
-                    );
-                    console.error("[IMG] Image element:", e.currentTarget);
-                    e.currentTarget.style.display = "none";
-                  }}
-                  loading="lazy"
+                  className="w-full h-auto max-h-64 sm:max-h-56 object-contain bg-muted/20"
+                  loading="eager"
                   decoding="async"
                 />
               ) : (
@@ -527,11 +516,6 @@ export function BlockEditor({
                     ]
                   </span>
                 </button>
-                {block.metadata?.status === "in_progress" && (
-                  <span className="text-[6px] font-bold text-github-yellow/50 mt-0.5 tracking-tighter animate-pulse uppercase">
-                    Run
-                  </span>
-                )}
                 {block.metadata?.status === "done" && (
                   <span className="text-[6px] font-bold text-github-green/50 mt-0.5 tracking-tighter uppercase">
                     Done
@@ -645,6 +629,9 @@ export function BlockEditor({
                 }}
                 onFocus={onFocus}
                 onKeyDown={(e) => {
+                  // Handle Slash Command Keyboard Navigation
+                  if (handleSlashKeyDown(e)) return;
+
                   // Smart Auto-pairing
                   const pairs: Record<string, string> = {
                     "(": ")",
@@ -685,7 +672,7 @@ export function BlockEditor({
                 }}
                 rows={1}
                 className={cn(
-                  "w-full bg-transparent border-none focus:ring-0 resize-none p-0 overflow-hidden leading-relaxed focus:outline-none placeholder:opacity-20 transition-all",
+                  "w-full bg-transparent border-none focus:ring-0 resize-none p-0 overflow-hidden focus:outline-none placeholder:opacity-20 transition-colors",
                   block.type === "code" && "font-mono",
                   block.type === "checkbox" &&
                     block.metadata?.status === "done" &&

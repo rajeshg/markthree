@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { useEditor } from "@/hooks/useEditor";
 import { driveApi } from "@/lib/drive/drive-client";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useSettings } from "@/contexts/SettingsContext";
 import {
   Save,
@@ -19,36 +19,54 @@ import { cn } from "@/lib/utils";
 
 // FileViewer component for non-markdown files
 function FileViewer({ fileData, fileId }: { fileData: any; fileId: string }) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  
+  // Use TanStack Query to fetch and cache the blob
+  const { data: blobUrl, isLoading: loading, error } = useQuery({
+    queryKey: ["file-blob", fileId],
+    queryFn: async () => {
+      const blob = await driveApi.getFileBlob(fileId);
+      
+      if (blob.size === 0) {
+        throw new Error("Blob is empty");
+      }
+      
+      // Check if blob is actually an image by reading the first few bytes (magic numbers)
+      const header = await blob.slice(0, 4).arrayBuffer();
+      const headerBytes = new Uint8Array(header);
+      
+      // PNG: 89 50 4E 47
+      // JPEG: FF D8 FF
+      // GIF: 47 49 46
+      const isPNG = headerBytes[0] === 0x89 && headerBytes[1] === 0x50;
+      const isJPEG = headerBytes[0] === 0xFF && headerBytes[1] === 0xD8;
+      const isGIF = headerBytes[0] === 0x47 && headerBytes[1] === 0x49;
+      
+      if (!isPNG && !isJPEG && !isGIF) {
+        throw new Error("Invalid image data received from Drive API");
+      }
+      
+      // Force the correct MIME type when creating the blob URL
+      const correctMimeType = isPNG ? "image/png" : isJPEG ? "image/jpeg" : "image/gif";
+      const typedBlob = new Blob([blob], { type: correctMimeType });
+      
+      const url = URL.createObjectURL(typedBlob);
+      return url;
+    },
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 10,
+  });
 
+  // Cleanup blob URL when query is garbage collected or component unmounts
   useEffect(() => {
-    if (fileData && fileId) {
-      setLoading(true);
-      setError(null);
-
-      driveApi
-        .getFileBlob(fileId)
-        .then((blob) => {
-          const url = URL.createObjectURL(blob);
-          setBlobUrl(url);
-        })
-        .catch((err) => {
-          console.error("Failed to load file blob:", err);
-          setError("Failed to load file");
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    }
-
     return () => {
       if (blobUrl) {
         URL.revokeObjectURL(blobUrl);
+        // Remove from cache to force refetch next time
+        queryClient.removeQueries({ queryKey: ["file-blob", fileId] });
       }
     };
-  }, [fileData, fileId]);
+  }, [blobUrl, fileId, queryClient]);
 
   if (loading) {
     return (
@@ -63,7 +81,7 @@ function FileViewer({ fileData, fileId }: { fileData: any; fileId: string }) {
       <div className="flex-1 flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
           <div className="text-red-500 text-lg">
-            ⚠️ {error || "Failed to load file"}
+            ⚠️ {error?.message || "Failed to load file"}
           </div>
           <button
             onClick={() =>
@@ -109,12 +127,17 @@ function FileViewer({ fileData, fileId }: { fileData: any; fileId: string }) {
         </div>
 
         {/* Image Viewer */}
-        <div className="flex-1 flex items-center justify-center p-4 md:p-8 overflow-auto">
+        <div 
+          className="flex-1 flex items-center justify-center p-4 md:p-8 overflow-auto"
+        >
           <img
             src={blobUrl}
             alt={metadata.name}
             className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
-            style={{ maxWidth: "95vw", maxHeight: "80vh" }}
+            style={{ 
+              maxWidth: "95vw", 
+              maxHeight: "80vh"
+            }}
           />
         </div>
       </div>
@@ -196,59 +219,103 @@ function FileViewer({ fileData, fileId }: { fileData: any; fileId: string }) {
   );
 }
 
+const searchSchema = z.object({
+  fileId: z.string().optional(),
+});
+
 export const Route = createFileRoute("/_authenticated/editor")({
-  validateSearch: (search) =>
-    z
-      .object({
-        fileId: z.string().optional(),
-      })
-      .parse(search),
+  validateSearch: searchSchema,
+  
+  beforeLoad: async ({ search }) => {
+    // If no fileId in URL, check for last opened file and redirect
+    if (!search.fileId && typeof window !== "undefined") {
+      const lastFileId = localStorage.getItem("markthree_last_file_id");
+      if (lastFileId) {
+        throw redirect({
+          to: "/editor",
+          search: { fileId: lastFileId },
+          replace: true,
+        });
+      }
+    }
+  },
+  
+  loaderDeps: ({ search }) => ({ fileId: search.fileId }),
+  
+  loader: async ({ context, deps }) => {
+    const fileId = deps.fileId;
+    
+    if (!fileId) {
+      return { fileData: null };
+    }
+
+    try {
+      // Use queryClient to fetch with caching
+      const fileData = await context.queryClient.ensureQueryData({
+        queryKey: ["file", fileId],
+        queryFn: async () => {
+          const metadata = await driveApi.getFileMetadata(fileId);
+
+          // Simple check: if filename ends with .md, it's markdown
+          if (metadata.name.toLowerCase().endsWith(".md")) {
+            const content = await driveApi.getFileContent(fileId);
+            return { metadata, content, isMarkdown: true };
+          }
+          
+          // Otherwise, it's a binary file (image, etc)
+          return { metadata, content: "", isMarkdown: false };
+        },
+        staleTime: 1000 * 60 * 5, // 5 minutes
+      });
+
+      // Store last opened file
+      if (typeof window !== "undefined") {
+        localStorage.setItem("markthree_last_file_id", fileId);
+      }
+
+      return { fileData };
+    } catch (err) {
+      console.error("[Loader] Failed to load file:", err);
+      
+      // If file not found, clear from localStorage
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("markthree_last_file_id");
+      }
+      
+      throw redirect({
+        to: "/editor",
+        search: {},
+        replace: true,
+      });
+    }
+  },
+  
   component: EditorPage,
 });
 
 function EditorPage() {
   const searchParams = Route.useSearch();
-  const { fileId: queryFileId } = searchParams;
+  const loaderData = Route.useLoaderData();
+  const fileId = searchParams.fileId ?? null; // Use fileId directly from URL, convert undefined to null
+  const { fileData } = loaderData;
   const { settings } = useSettings();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
 
-  const [fileId, setFileId] = useState<string | null>(queryFileId || null);
   const [fileName, setFileName] = useState("Untitled");
   const lastLoadedFileIdRef = useRef<string | null>(null);
-  const isInitialLoadRef = useRef(true);
 
   const {
     state,
     updateBlock,
     addBlock,
     moveBlock,
+    mergeWithPrevious,
     getMarkdown,
     resetEditor,
     setActiveBlock,
   } = useEditor("");
   const [saving, setSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-
-  // Sync state with query param and handle redirection for last open doc
-  useEffect(() => {
-    if (queryFileId) {
-      setFileId(queryFileId);
-      localStorage.setItem("markthree_last_file_id", queryFileId);
-    } else if (isInitialLoadRef.current) {
-      const lastFileId = localStorage.getItem("markthree_last_file_id");
-      if (lastFileId) {
-        navigate({
-          to: "/editor",
-          search: { fileId: lastFileId },
-          replace: true,
-        });
-      }
-      isInitialLoadRef.current = false;
-    } else {
-      setFileId(null);
-    }
-  }, [queryFileId, navigate]);
 
   const handleImageUpload = useCallback(
     async (file: File) => {
@@ -308,73 +375,18 @@ function EditorPage() {
     });
   }, [state.blocks]);
 
-  // Fetch file metadata and content
-  const {
-    data: fileData,
-    isLoading: isLoadingContent,
-    isSuccess,
-    error: fetchError,
-  } = useQuery({
-    queryKey: ["file", fileId],
-    queryFn: async () => {
-      if (!fileId) {
-        return null;
-      }
-      try {
-        const metadata = await driveApi.getFileMetadata(fileId);
-
-        // For markdown files, fetch content
-        if (metadata.name.toLowerCase().endsWith(".md")) {
-          const content = await driveApi.getFileContent(fileId);
-          return { metadata, content, isMarkdown: true };
-        } else {
-          // For other files, just return metadata - we'll fetch blob when needed
-          return { metadata, content: "", isMarkdown: false };
-        }
-      } catch (err) {
-        console.error("[Editor] Fetch error:", err);
-        throw err;
-      }
-    },
-    enabled: !!fileId,
-    retry: (failureCount, error) => {
-      // Don't retry on authentication errors (401/403) - redirect will happen
-      if (
-        error?.message?.includes("Authentication expired") ||
-        error?.message?.includes("Not authenticated")
-      ) {
-        return false;
-      }
-      // Retry other errors up to 2 times
-      return failureCount < 2;
-    },
-  });
-
-  // Handle case where remembered file is missing/deleted
-  useEffect(() => {
-    if (fetchError) {
-      console.warn("[Editor] File not found or inaccessible, clearing last doc.");
-      localStorage.removeItem("markthree_last_file_id");
-      navigate({ to: "/editor", search: {}, replace: true });
-    }
-  }, [fetchError, navigate]);
-
-  // Load content into editor when data arrives
+  // Load content into editor when data arrives from loader
   useEffect(() => {
     if (fileData) {
       const needsLoad = lastLoadedFileIdRef.current !== fileId;
+      
       if (needsLoad) {
         if (fileData.isMarkdown) {
           resetEditor(fileData.content || "");
           setFileName(fileData.metadata.name.replace(".md", ""));
 
           // Focus the end of the file on open
-          setTimeout(() => {
-            const lastBlock = state.blocks[state.blocks.length - 1];
-            if (lastBlock) {
-              setActiveBlock(lastBlock.id);
-            }
-          }, 50);
+          shouldFocusLastRef.current = true;
         }
         lastLoadedFileIdRef.current = fileId;
       }
@@ -382,9 +394,35 @@ function EditorPage() {
       resetEditor("");
       lastLoadedFileIdRef.current = null;
     }
-  }, [fileData, fileId, isSuccess, resetEditor, setActiveBlock, state.blocks.length]);
+  }, [fileData, fileId, resetEditor]);
 
-  // Auto-focus new blocks and scroll into view
+  // Separate effect to handle focusing the last block after state.blocks is updated
+  const shouldFocusLastRef = useRef(false);
+
+  useEffect(() => {
+    if (shouldFocusLastRef.current && state.blocks.length > 0) {
+      const lastBlockId = state.blocks[state.blocks.length - 1].id;
+      
+      // Update state first
+      setActiveBlock(lastBlockId);
+      
+      // Minimal delay - 50ms instead of 300ms
+      setTimeout(() => {
+        const el = document.getElementById(`block-${lastBlockId}`) as HTMLTextAreaElement;
+        if (el) {
+          el.focus();
+          const len = el.value.length;
+          el.setSelectionRange(len, len);
+          // Instant scroll instead of smooth
+          el.scrollIntoView({ behavior: "instant", block: "center" });
+        }
+      }, 50);
+      
+      shouldFocusLastRef.current = false;
+    }
+  }, [state.blocks, setActiveBlock]);
+
+  // Auto-focus active block and scroll into view
   useEffect(() => {
     if (state.activeBlockId) {
       const el = document.getElementById(
@@ -394,8 +432,10 @@ function EditorPage() {
         if (document.activeElement !== el) {
           el.focus();
         }
-        // Ensure the block is visible, especially when keyboard pops up
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Instant scroll for snappiness
+        requestAnimationFrame(() => {
+          el.scrollIntoView({ behavior: "instant", block: "center" });
+        });
       }
     }
   }, [state.activeBlockId]);
@@ -439,7 +479,7 @@ function EditorPage() {
   if (!fileId) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-background">
-        <div className="max-w-md space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="max-w-md space-y-6">
           <div className="relative mx-auto w-24 h-24 bg-github-blue/10 rounded-full flex items-center justify-center">
             <FileText size={48} className="text-github-blue" />
             <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-background border-2 border-github-blue/20 rounded-full flex items-center justify-center">
@@ -455,19 +495,11 @@ function EditorPage() {
           </div>
           <button
             onClick={() => addBlock("p")}
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-github-blue hover:bg-github-blue/80 text-white rounded-lg font-bold transition-all shadow-lg shadow-github-blue/20 hover:scale-105 active:scale-95"
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-github-blue hover:bg-github-blue/80 text-white rounded-lg font-bold transition-colors shadow-lg shadow-github-blue/20"
           >
             Create New Document
           </button>
         </div>
-      </div>
-    );
-  }
-
-  if (isLoadingContent) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-background">
-        <Loader2 className="animate-spin text-github-blue" size={32} />
       </div>
     );
   }
@@ -511,6 +543,9 @@ function EditorPage() {
               <span className="text-xs opacity-50">
                 {fileId ? "Synced to Drive" : "Local Only"}
               </span>
+              <span className="text-xs opacity-30 ml-2">
+                [{state.blocks.length} blocks]
+              </span>
             </div>
             <div className="flex items-center gap-4">
               {state.isDirty && (
@@ -549,49 +584,64 @@ function EditorPage() {
               }
             }}
           >
+            {state.blocks.length === 0 && (
+              <div className="text-muted-foreground text-sm p-4">
+                No blocks loaded. Click to add content.
+              </div>
+            )}
             {state.blocks.map((block, index) => (
-              <BlockEditor
-                key={block.id}
-                block={block}
-                lineNumberOffset={lineOffsets[index]}
-                showLineNumbers={settings.lineNumbers}
-                isActive={state.activeBlockId === block.id}
-                onUpdate={(updates) => updateBlock(block.id, updates)}
-                onFocus={() => setActiveBlock(block.id)}
-                onMoveUp={() => moveBlock(block.id, "up")}
-                onMoveDown={() => moveBlock(block.id, "down")}
-                onKeyDown={(e) => {
-                  // Block reordering with Alt + Arrow
-                  if (
-                    e.altKey &&
-                    (e.key === "ArrowUp" || e.key === "ArrowDown")
-                  ) {
-                    e.preventDefault();
-                    moveBlock(block.id, e.key === "ArrowUp" ? "up" : "down");
-                    return;
-                  }
-
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    // If it's a list or checkbox, continue the pattern
+                <BlockEditor
+                  key={block.id}
+                  block={block}
+                  lineNumberOffset={lineOffsets[index]}
+                  showLineNumbers={settings.lineNumbers}
+                  isActive={state.activeBlockId === block.id}
+                  onUpdate={(updates) => updateBlock(block.id, updates)}
+                  onFocus={() => setActiveBlock(block.id)}
+                  onMoveUp={() => moveBlock(block.id, "up")}
+                  onMoveDown={() => moveBlock(block.id, "down")}
+                  onKeyDown={(e) => {
+                    // Block reordering with Alt + Arrow
                     if (
-                      ["ul", "ol", "checkbox"].includes(block.type) &&
-                      block.content === ""
+                      e.altKey &&
+                      (e.key === "ArrowUp" || e.key === "ArrowDown")
                     ) {
-                      updateBlock(block.id, { type: "p" });
-                    } else {
-                      // If current is checkbox, new one starts as 'todo' status
-                      const newType =
-                        block.type === "ol" ||
-                        block.type === "ul" ||
-                        block.type === "checkbox"
-                          ? block.type
-                          : "p";
-                      addBlock(newType, block.id);
+                      e.preventDefault();
+                      moveBlock(block.id, e.key === "ArrowUp" ? "up" : "down");
+                      return;
                     }
-                  }
-                }}
-              />
+
+                    // Backspace at start of block - merge with previous
+                    if (e.key === "Backspace") {
+                      const textarea = e.currentTarget;
+                      if (textarea.selectionStart === 0 && textarea.selectionEnd === 0) {
+                        e.preventDefault();
+                        mergeWithPrevious(block.id);
+                        return;
+                      }
+                    }
+
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      // If it's a list or checkbox, continue the pattern
+                      if (
+                        ["ul", "ol", "checkbox"].includes(block.type) &&
+                        block.content === ""
+                      ) {
+                        updateBlock(block.id, { type: "p" });
+                      } else {
+                        // If current is checkbox, new one starts as 'todo' status
+                        const newType =
+                          block.type === "ol" ||
+                          block.type === "ul" ||
+                          block.type === "checkbox"
+                            ? block.type
+                            : "p";
+                        addBlock(newType, block.id);
+                      }
+                    }
+                  }}
+                />
             ))}
           </div>
         </>

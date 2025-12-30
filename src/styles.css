@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 @import "@fontsource/fira-code";
 
 @custom-variant dark (&:is(.dark *));

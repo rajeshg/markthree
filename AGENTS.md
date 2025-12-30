@@ -1,6 +1,25 @@
 # MarkThree v2 - Agent Guidelines
 
-This document provides agentic coding agents with essential instructions for working on the MarkThree v2 project (React 19 + TanStack + TypeScript).
+This document provides agentic coding agents with essential instructions for working on the MarkThree v2 project (React 19 + TanStack Start + TypeScript).
+
+## Critical: TanStack Start SSR Architecture
+
+**MarkThree v2 uses TanStack Start** which provides full SSR (Server-Side Rendering) capabilities. We MUST leverage these patterns properly to avoid common pitfalls like infinite loops, unnecessary re-renders, and poor performance.
+
+### The Golden Rule: Minimize `useEffect`
+
+**Target: <15 `useEffect` hooks in the entire codebase**
+
+`useEffect` should ONLY be used for:
+1. **DOM side effects** (focus management, scroll position, canvas drawing)
+2. **External subscriptions** (WebSocket, window event listeners)
+3. **Cleanup operations** (timers, animations, object URLs)
+
+`useEffect` should NEVER be used for:
+- ❌ Data fetching (use loaders instead)
+- ❌ Redirects (use `beforeLoad` instead)
+- ❌ Authentication checks (use `beforeLoad` instead)
+- ❌ URL param synchronization (use loaders/search params instead)
 
 ## Build & Test Commands
 
@@ -82,32 +101,150 @@ const Editor = (props: any) => { /* ... */ };
 function doStuff(x) { /* ... */ }
 ```
 
-### React Patterns
+### React Patterns with TanStack Start SSR
 - **Functional components only** (no class components)
 - **Hooks:** Use TanStack Query for server state, Context for global state
-- **useEffect minimization:** <15 total in codebase
-  - Use TanStack Router loaders for initial data fetching
-  - Use TanStack Query for cache management
-  - Use useSyncExternalStore for external subscriptions
-  - Custom hooks encapsulate useEffect logic
-  
+- **useEffect minimization:** <15 total in codebase (see Golden Rule above)
+
+#### Data Fetching: Use Loaders, Not useEffect
 ```typescript
-// Good: Use loader instead of useEffect
+// ✅ GOOD: Use loader for data fetching
 export const Route = createFileRoute('/docs/$docId')({
-  loader: ({ params }) => queryClient.ensureQueryData(docQuery(params.docId)),
+  loader: async ({ context, params }) => {
+    // This runs on server AND client during navigation
+    const doc = await context.queryClient.ensureQueryData({
+      queryKey: ['doc', params.docId],
+      queryFn: () => fetchDoc(params.docId),
+    });
+    return { doc };
+  },
   component: DocPage,
 });
 
-function DocPage(): JSX.Element {
-  const { docId } = Route.useParams();
-  const { data: doc } = useQuery(docQuery(docId));
+function DocPage() {
+  const { doc } = Route.useLoaderData();
+  // Data is already here, no loading states needed!
   return <div>{doc.title}</div>;
 }
 
-// Avoid: useEffect for data fetching
+// ❌ BAD: useEffect for data fetching
+function BadDocPage() {
+  const { docId } = useParams();
+  const [doc, setDoc] = useState(null);
+  
+  useEffect(() => {
+    fetchDoc(docId).then(setDoc); // Client-only, loading states, race conditions
+  }, [docId]);
+  
+  if (!doc) return <Loader />;
+  return <div>{doc.title}</div>;
+}
+```
+
+#### Redirects: Use beforeLoad, Not useEffect
+```typescript
+// ✅ GOOD: Redirects in beforeLoad
+export const Route = createFileRoute('/')({
+  beforeLoad: async ({ context }) => {
+    const { data: session } = await authClient.getSession();
+    
+    if (session) {
+      // Check settings from localStorage or context
+      const hasSetup = localStorage.getItem('app-settings');
+      if (hasSetup) {
+        throw redirect({ to: '/editor' });
+      }
+      throw redirect({ to: '/setup' });
+    }
+    // No redirect needed, render component
+  },
+  component: HomePage,
+});
+
+// ❌ BAD: Redirects in useEffect (causes loops)
+function BadHomePage() {
+  const { data: session } = useSession();
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (session) {
+      navigate({ to: '/editor' }); // Runs on every render, can loop
+    }
+  }, [session, navigate]); // Dependencies can cause infinite loops
+  
+  return <div>Home</div>;
+}
+```
+
+#### Authentication: Use beforeLoad
+```typescript
+// ✅ GOOD: Auth check in route beforeLoad
+export const Route = createFileRoute('/_authenticated')({
+  beforeLoad: async ({ location }) => {
+    const { data: session } = await authClient.getSession();
+    if (!session) {
+      throw redirect({
+        to: '/',
+        search: { redirect: location.href },
+      });
+    }
+  },
+});
+
+// ❌ BAD: Auth check in useEffect
+function ProtectedPage() {
+  const { data: session } = useSession();
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (!session) {
+      navigate({ to: '/' }); // Flickers, can show protected content
+    }
+  }, [session]);
+  
+  return <div>Protected Content</div>; // Might flash before redirect
+}
+```
+
+#### Acceptable useEffect Examples
+```typescript
+// ✅ GOOD: Focus management (DOM side effect)
 useEffect(() => {
-  fetchDoc(docId).then(setDoc);
-}, [docId]);
+  const input = inputRef.current;
+  if (input && shouldFocus) {
+    input.focus();
+    input.setSelectionRange(0, input.value.length);
+  }
+}, [shouldFocus]);
+
+// ✅ GOOD: Window event listener (external subscription)
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      openSearchModal();
+    }
+  };
+  
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, [openSearchModal]);
+
+// ✅ GOOD: Cleanup (object URL)
+useEffect(() => {
+  if (file) {
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }
+}, [file]);
+
+// ❌ BAD: Data synchronization (use loader/search params)
+useEffect(() => {
+  if (queryParam !== localState) {
+    setLocalState(queryParam); // This should be in search params or loader
+  }
+}, [queryParam, localState]);
 ```
 
 ### Naming Conventions
@@ -177,9 +314,9 @@ try {
 ### Router File Structure
 ```typescript
 // src/routes/__root.tsx
-import { RootRoute } from '@tanstack/react-router';
+import { createRootRouteWithContext } from '@tanstack/react-router';
 
-export const RootRoute = createRootRoute({
+export const Route = createRootRouteWithContext<MyRouterContext>()({
   component: Root,
   pendingComponent: LoadingPage,
   errorComponent: ErrorPage,
@@ -187,8 +324,49 @@ export const RootRoute = createRootRoute({
 
 // src/routes/index.tsx (/)
 // src/routes/setup.tsx (/setup)
+// src/routes/_authenticated.tsx (layout with beforeLoad)
 // src/routes/_authenticated/editor.tsx (protected)
-// src/routes/_authenticated/$docId.tsx (/doc/:id)
+```
+
+### Loader Pattern
+```typescript
+// Loaders run on both server and client
+export const Route = createFileRoute('/editor')({
+  validateSearch: z.object({
+    fileId: z.string().optional(),
+  }),
+  
+  beforeLoad: async ({ search }) => {
+    // Handle redirects before loading data
+    if (!search.fileId) {
+      const lastFileId = localStorage.getItem('last_file_id');
+      if (lastFileId) {
+        throw redirect({ to: '/editor', search: { fileId: lastFileId } });
+      }
+    }
+  },
+  
+  loader: async ({ context, search }) => {
+    // Fetch data with TanStack Query integration
+    const fileData = await context.queryClient.ensureQueryData({
+      queryKey: ['file', search.fileId],
+      queryFn: () => driveApi.getFile(search.fileId),
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    });
+    
+    return { fileData };
+  },
+  
+  component: EditorPage,
+});
+
+function EditorPage() {
+  const { fileData } = Route.useLoaderData();
+  const search = Route.useSearch();
+  
+  // Data is already loaded, no useEffect needed
+  return <Editor file={fileData} />;
+}
 ```
 
 ### Query Keys Convention
